@@ -207,4 +207,3 @@ target_link_libraries(planar_normal_estimation ${catkin_LIBRARIES})
 #
 add_executable(planar_feature_extraction src/planar_feature_extraction.cpp)
 target_link_libraries(planar_feature_extraction ${catkin_LIBRARIES})
-add_dependencies(planar_feature_extraction planar_landmark_ekf_slam_generate_messages_cpp)
