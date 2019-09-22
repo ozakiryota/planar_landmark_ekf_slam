@@ -121,6 +121,7 @@ void PlanarFeatureExtraction::Clustering(void)
 		tmp_feature.max_x = Max[0];
 		tmp_feature.max_y = Max[1];
 		tmp_feature.max_z = Max[2];
+		tmp_feature.cluster_size = cluster_indices[i].indices.size();
 		features.features.push_back(tmp_feature);
 		/*input for visualization*/
 		pcl::PointNormal tmp_normal;
