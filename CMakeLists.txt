@@ -82,6 +82,7 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
+  geometry_msgs
 )
 
 ################################################
@@ -207,3 +208,8 @@ target_link_libraries(planar_normal_estimation ${catkin_LIBRARIES})
 #
 add_executable(planar_feature_extraction src/planar_feature_extraction.cpp)
 target_link_libraries(planar_feature_extraction ${catkin_LIBRARIES})
+add_dependencies(planar_feature_extraction ${PROJECT_NAME}_generate_messages_cpp)
+#
+add_executable(planar_landmark_ekf src/planar_landmark_ekf.cpp)
+target_link_libraries(planar_landmark_ekf ${catkin_LIBRARIES})
+add_dependencies(planar_landmark_ekf ${PROJECT_NAME}_generate_messages_cpp)

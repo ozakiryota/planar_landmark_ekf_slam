@@ -14,6 +14,10 @@
 // #include <Eigen/LU>
 #include <std_msgs/Float64MultiArray.h>
 
+#include <pcl/kdtree/kdtree_flann.h>
+#include "planar_landmark_ekf_slam/PlanarFeature.h"
+#include "planar_landmark_ekf_slam/PlanarFeatureArray.h"
+
 class WallEKFSLAM{
 	private:
 		/*node handle*/
@@ -80,7 +84,11 @@ class WallEKFSLAM{
 		Eigen::VectorXd X;
 		Eigen::MatrixXd P;
 		sensor_msgs::Imu bias;
-		pcl::PointCloud<pcl::InterestPoint>::Ptr d_gaussian_sphere {new pcl::PointCloud<pcl::InterestPoint>};
+		pcl::PointCloud<pcl::PointXYZ>::Ptr observation {new pcl::PointCloud<pcl::PointXYZ>};
+		pcl::PointCloud<pcl::PointXYZ>::Ptr landmarks {new pcl::PointCloud<pcl::PointXYZ>};
+		planar_landmark_ekf_slam::PlanarFeatureArray list_observation;
+		planar_landmark_ekf_slam::PlanarFeatureArray list_landmarks;
+		pcl::PointCloud<pcl::InterestPoint>::Ptr d_gaussian_sphere_ {new pcl::PointCloud<pcl::InterestPoint>};
 		std::vector<LMInfo> list_lm_info;
 		std::vector<LMInfo> list_erased_lm_info;
 		/*flags*/
@@ -110,6 +118,8 @@ class WallEKFSLAM{
 		void CallbackOdom(const nav_msgs::OdometryConstPtr& msg);
 		void PredictionOdom(nav_msgs::Odometry odom, double dt);
 		void CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg);
+		void CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg);
+		bool Judge(planar_landmark_ekf_slam::PlanarFeature obs, planar_landmark_ekf_slam::PlanarFeature lm);
 		void SearchCorrespondObsID(std::vector<ObsInfo>& list_obs_info, int lm_id);
 		void Innovation(int lm_id, const Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
 		void PushBackLMInfo(const Eigen::Vector3d& Nl);
@@ -431,16 +441,108 @@ void WallEKFSLAM::PredictionOdom(nav_msgs::Odometry odom, double dt)
 	if(mode_remove_unavailable_lm)	remover.Recover(X, P, list_lm_info);
 }
 
+void WallEKFSLAM::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
+{
+	list_observation = *msg;
+	for(size_t i=0;i<msg->features.size();++i){
+		/*input*/
+		pcl::PointXYZ tmp_point;
+		tmp_point.x = msg->features[i].point_local.x;
+		tmp_point.y = msg->features[i].point_local.y;
+		tmp_point.z = msg->features[i].point_local.z;
+		observation->points.push_back(tmp_point);
+		/*transformation*/
+		Eigen::Vector3d MinLocal(
+			msg->features[i].min_local.x,
+			msg->features[i].min_local.y,
+			msg->features[i].min_local.z
+		);
+		Eigen::Vector3d MaxLocal(
+			msg->features[i].max_local.x,
+			msg->features[i].max_local.y,
+			msg->features[i].max_local.z
+		);
+		Eigen::Vector3d Nl(
+			msg->features[i].point_local.x,
+			msg->features[i].point_local.y,
+			msg->features[i].point_local.z
+		);
+		Eigen::Vector3d MinGlobal = PointLocalToGlobal(MinLocal);
+		Eigen::Vector3d MaxGlobal = PointLocalToGlobal(MaxLocal);
+		Eigen::Vector3d Ng = PlaneLocalToGlobal(Nl);
+		/*input*/
+		list_observation.features[i].min_global.x = MinGlobal(0);
+		list_observation.features[i].min_global.y = MinGlobal(0);
+		list_observation.features[i].min_global.z = MinGlobal(0);
+		list_observation.features[i].point_global.x = Ng(0);
+		list_observation.features[i].point_global.y = Ng(1);
+		list_observation.features[i].point_global.z = Ng(2);
+		list_observation.features[i].normal_is_inward = CheckNormalIsInward(Ng);
+	}
+
+	*landmarks = StateVectorToPC();
+	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+	kdtree.setInputCloud(landmarks);
+	const double search_radius = 0.1;
+	for(size_t i=0;i<list_observation.features.size();++i){
+		/*kdtree search*/
+		std::vector<int> correspond_lm_id;
+		std::vector<float> correspond_lm_dist;
+		if(kdtree.radiusSearch(observation->points[i], search_radius, correspond_lm_id, correspond_lm_dist)<=0)	std::cout << "kdtree error" << std::endl;
+
+		/*judge*/
+		for(size_t j=0;j<correspond_lm_id.size();++j){
+		}
+	}
+}
+
+bool WallEKFSLAM::Judge(planar_landmark_ekf_slam::PlanarFeature obs, planar_landmark_ekf_slam::PlanarFeature lm)
+{
+	/*judge in normal direction*/
+	if(obs.normal_is_inward != lm.normal_is_inward)	return false;
+	/*judge in position*/
+	Eigen::Vector3d ObsMin(
+		obs.min_global.x,
+		obs.min_global.y,
+		obs.min_global.z
+	);
+	Eigen::Vector3d ObsMax(
+		obs.max_global.x,
+		obs.max_global.y,
+		obs.max_global.z
+	);
+	Eigen::Vector3d LmMin(
+		lm.min_global.x,
+		lm.min_global.y,
+		lm.min_global.z
+	);
+	Eigen::Vector3d LmMax(
+		lm.max_global.x,
+		lm.max_global.y,
+		lm.max_global.z
+	);
+	Eigen::Vector3d ObsCent = ObsMin + (ObsMax - ObsMin)/2.0;
+	Eigen::Vector3d LmCent = LmMin + (LmMax - LmMin)/2.0;
+	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
+	Eigen::Vector3d SumWidth = (ObsMax - ObsMin).cwiseAbs()/2.0 + (LmMax - LmMin).cwiseAbs()/2.0;
+
+	for(size_t i=0;i<CentDist.size();++i){
+		if(CentDist(i) > SumWidth(i))	return false;
+	}
+	/*pass*/
+	return true;
+}
+
 void WallEKFSLAM::CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg)
 {
 	std::cout << "Callback D-Gaussian Sphere" << std::endl;
 	std::cout << "num_wall = " << (X.size() - size_robot_state)/size_wall_state << std::endl;
 	
-	pcl::fromROSMsg(*msg, *d_gaussian_sphere);
-	std::cout << "d_gaussian_sphere->points.size() = " << d_gaussian_sphere->points.size() << std::endl;
-	for(size_t i=0;i<d_gaussian_sphere->points.size();i++)	std::cout << "d_gaussian_sphere->points[" << i << "].strength = " << d_gaussian_sphere->points[i].strength << std::endl;
+	pcl::fromROSMsg(*msg, *d_gaussian_sphere_);
+	std::cout << "d_gaussian_sphere_->points.size() = " << d_gaussian_sphere_->points.size() << std::endl;
+	for(size_t i=0;i<d_gaussian_sphere_->points.size();i++)	std::cout << "d_gaussian_sphere_->points[" << i << "].strength = " << d_gaussian_sphere_->points[i].strength << std::endl;
 
-	std::vector<ObsInfo> list_obs_info(d_gaussian_sphere->points.size());
+	std::vector<ObsInfo> list_obs_info(d_gaussian_sphere_->points.size());
 
 	matching_lines.points.clear();	//visualization
 	planes.markers.clear();	//visualization
@@ -473,9 +575,9 @@ void WallEKFSLAM::CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr
 	for(size_t i=0;i<list_obs_info.size();i++){
 		int lm_id = list_obs_info[i].matched_lm_id;
 		Eigen::Vector3d Nl(
-			d_gaussian_sphere->points[i].x,
-			d_gaussian_sphere->points[i].y,
-			d_gaussian_sphere->points[i].z
+			d_gaussian_sphere_->points[i].x,
+			d_gaussian_sphere_->points[i].y,
+			d_gaussian_sphere_->points[i].z
 		);
 		if(lm_id==-1){	//new landmark
 			VectorVStack(Xnew, PlaneLocalToGlobal(Nl));
@@ -494,7 +596,7 @@ void WallEKFSLAM::CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr
 				VectorVStack(Zstacked, Nl);
 				VectorVStack(Hstacked, list_obs_info[i].H);
 				MatrixVStack(jHstacked, list_obs_info[i].jH);
-				double tmp_sigma = 0.2*100/(double)d_gaussian_sphere->points[i].strength;
+				double tmp_sigma = 0.2*100/(double)d_gaussian_sphere_->points[i].strength;
 				/* tmp_sigma *= 0.1*list_lm_info[lm_id].count_match; */
 				VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 				std::cout << "tmp_sigma = " << tmp_sigma << std::endl;
@@ -576,11 +678,11 @@ void WallEKFSLAM::SearchCorrespondObsID(std::vector<ObsInfo>& list_obs_info, int
 	double min_euclidean_dist = threshold_euclidean_dist;	//test
 	int correspond_id = -1;
 	/*search*/
-	for(size_t i=0;i<d_gaussian_sphere->points.size();i++){
+	for(size_t i=0;i<d_gaussian_sphere_->points.size();i++){
 		Eigen::Vector3d Zi(
-			d_gaussian_sphere->points[i].x,
-			d_gaussian_sphere->points[i].y,
-			d_gaussian_sphere->points[i].z
+			d_gaussian_sphere_->points[i].x,
+			d_gaussian_sphere_->points[i].y,
+			d_gaussian_sphere_->points[i].z
 		);
 
 		Eigen::VectorXd Hi;

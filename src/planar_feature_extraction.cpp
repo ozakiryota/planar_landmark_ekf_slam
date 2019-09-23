@@ -112,15 +112,15 @@ void PlanarFeatureExtraction::Clustering(void)
 		/* pcl::compute3DCentroid(*normals, cluster_indices[i], centroid); */
 		/*input*/
 		planar_landmark_ekf_slam::PlanarFeature tmp_feature;
-		tmp_feature.x = -fabs(AveNormal(3))*AveNormal(0);
-		tmp_feature.y = -fabs(AveNormal(3))*AveNormal(1);
-		tmp_feature.z = -fabs(AveNormal(3))*AveNormal(2);
-		tmp_feature.min_x = Min[0];
-		tmp_feature.min_y = Min[1];
-		tmp_feature.min_z = Min[2];
-		tmp_feature.max_x = Max[0];
-		tmp_feature.max_y = Max[1];
-		tmp_feature.max_z = Max[2];
+		tmp_feature.point_local.x = -fabs(AveNormal(3))*AveNormal(0);
+		tmp_feature.point_local.y = -fabs(AveNormal(3))*AveNormal(1);
+		tmp_feature.point_local.z = -fabs(AveNormal(3))*AveNormal(2);
+		tmp_feature.min_local.x = Min[0];
+		tmp_feature.min_local.y = Min[1];
+		tmp_feature.min_local.z = Min[2];
+		tmp_feature.max_local.x = Max[0];
+		tmp_feature.max_local.y = Max[1];
+		tmp_feature.max_local.z = Max[2];
 		tmp_feature.cluster_size = cluster_indices[i].indices.size();
 		features.features.push_back(tmp_feature);
 		/*input for visualization*/
