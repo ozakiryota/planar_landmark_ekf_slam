@@ -103,8 +103,8 @@ void PlanarFeatureExtraction::Clustering(void)
 		Eigen::Vector4f Min;
 		Eigen::Vector4f Max;		
 		getMinMax3D(*normals, cluster_indices[i], Min, Max);
-		std::cout << i << ": Min  = " << std::endl << Min << std::endl;
-		std::cout << i << ": Max  = " << std::endl << Max << std::endl;
+		/* std::cout << i << ": Min = " << std::endl << Min << std::endl; */
+		/* std::cout << i << ": Max = " << std::endl << Max << std::endl; */
 		/*average normal*/
 		Eigen::Vector4d AveNormal = ComputeAverageNormal(cluster_indices[i]);
 		/* #<{(|compute centroid|)}># */

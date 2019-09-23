@@ -501,6 +501,9 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 		std::vector<int> neighbor_obs_id;
 		std::vector<float> neighbor_obs_sqrdist;
 		kdtree.radiusSearch(landmarks->points[i], search_radius, neighbor_obs_id, neighbor_obs_sqrdist);
+		for(size_t j=0;j<neighbor_obs_id.size();++j){
+			std::cout << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
+		}
 		/*search correspond*/
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			int obs_id = neighbor_obs_id[j];
@@ -592,6 +595,7 @@ void PlanarLandmarkEKF::SyncWithStateVector(void)
 		list_lm.features[i].point_global.y = X(size_robot_state + i*size_lm_state + 1);
 		list_lm.features[i].point_global.z = X(size_robot_state + i*size_lm_state + 2);
 		list_lm.features[i].id = i;
+		list_lm.features[i].corr_id = -1;
 		list_lm.features[i].was_observed_in_this_scan = false;
 	}
 }

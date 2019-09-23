@@ -1,0 +1,52 @@
+<launch>
+	<!-- global rosparam -->
+	<param name="use_sim_time" value="true"/>
+
+	<!-- rosbag -->
+	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/mocap/0119_infant/2019&#45;01&#45;19&#45;18&#45;26&#45;15.bag &#45;s 75"/> -->
+	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019&#45;05&#45;24&#45;18&#45;40&#45;39.bag"/> -->
+	<node pkg="rosbag" type="play" name="player" args="--clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019-07-04-20-05-36.bag"/>
+
+	<!-- rviz -->
+	<!-- <node pkg="rviz" type="rviz" name="rviz" args="&#45;d $(find gaussian_sphere_slam)rviz_config/wall_ekf_slam.rviz"/> -->
+
+	<!-- sensor driver -->
+	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
+	<node pkg="pose_estimation_walls" name="odom_republish_infant" type="odom_republish_infant"/>
+
+	<!-- proposed method -->
+	<node pkg="gyrodometry" name="initial_alignment" type="initial_alignment" output="screen">
+		<param name="initial_orientation_is_0001" type="bool" value="true"/>
+	</node>
+	<node pkg="planar_landmark_ekf_slam" name="planar_normal_estimation" type="planar_normal_estimation" output="screen">
+		<param name="skip" type="int" value="3"/>
+		<param name="search_radius_ratio" type="double" value="0.09"/>
+		<param name="min_serach_radius" type="double" value="0.1"/>
+		<!-- <param name="mode_remove_ground" type="bool" value="true"/> -->
+		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
+		<!-- <param name="mode_selection" type="bool" value="false"/> -->
+	</node>
+	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction" output="screen">
+		<param name="cluster_tolerance" type="double" value="0.1"/>
+		<param name="min_cluster_size" type="int" value="150"/>
+	</node>
+	<node pkg="planar_landmark_ekf_slam" name="planar_landmark_ekf" type="planar_landmark_ekf" output="screen"/>
+
+	<!-- comparisons -->
+	<node pkg="gyrodometry" name="gyrodometry3d" type="gyrodometry3d" output="screen">
+		<remap from="/odom" to="/tinypower/odom/republished"/>
+	</node>
+	<!-- <include file="$(find loam_velodyne)/launch/hector_loam_velodyne.launch"/> -->
+	<!-- <node pkg="msg_conversion" type="odometry_zxy_to_xyz" name="odometry_zxy_to_xyz"> -->
+	<!-- 	<remap from="/odom" to="/integrated_to_init"/> -->
+	<!-- 	<remap from="/odom/change_axis" to="/loamvelodyne_odometry"/> -->
+	<!-- </node> -->
+
+	<!-- for visualize trajectory -->
+	<node pkg="msg_conversion" type="posestamped_to_odometry" name="posestamped_to_odometry">
+		<remap from="/pose" to="/wall_ekf_slam/pose"/>
+		<remap from="/odom/from_posestamped" to="/wall_ekf_slam/odom"/>
+		<param name="child_frame_id" type="string" value="/wall_ekf_slam/odom"/>
+	</node>
+
+</launch>
