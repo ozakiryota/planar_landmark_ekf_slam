@@ -4,11 +4,11 @@
 
 	<!-- rosbag -->
 	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/mocap/0119_infant/2019&#45;01&#45;19&#45;18&#45;26&#45;15.bag &#45;s 75"/> -->
-	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019&#45;05&#45;24&#45;18&#45;40&#45;39.bag"/> -->
-	<node pkg="rosbag" type="play" name="player" args="--clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019-07-04-20-05-36.bag"/>
+	<node pkg="rosbag" type="play" name="player" args="--clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019-05-24-18-40-39.bag"/>
+	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019&#45;07&#45;04&#45;20&#45;05&#45;36.bag"/> -->
 
 	<!-- rviz -->
-	<!-- <node pkg="rviz" type="rviz" name="rviz" args="&#45;d $(find gaussian_sphere_slam)rviz_config/wall_ekf_slam.rviz"/> -->
+	<node pkg="rviz" type="rviz" name="rviz" args="-d $(find planar_landmark_ekf_slam)/rviz_config/planar_landmark_ekf_slam.rviz"/>
 
 	<!-- sensor driver -->
 	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
