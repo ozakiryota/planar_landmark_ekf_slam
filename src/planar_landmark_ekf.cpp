@@ -597,7 +597,7 @@ void PlanarLandmarkEKF::SyncWithStateVector(void)
 {
 	int num_lm = (X.size() - size_robot_state)/size_lm_state;
 	landmarks->points.clear();
-	for(int i=0;i<num_lm;i++){
+	for(int i=0;i<num_lm;++i){
 		/*transform*/
 		Eigen::Vector3d Ng = X.segment(size_robot_state + i*size_lm_state, size_lm_state);
 		Eigen::Vector3d Nl = PlaneGlobalToLocal(Ng);
