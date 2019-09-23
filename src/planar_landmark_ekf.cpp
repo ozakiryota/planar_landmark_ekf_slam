@@ -38,7 +38,7 @@ class PlanarLandmarkEKF{
 		ros::Publisher pub_variance;	//visualize
 		/*const*/
 		const int size_robot_state = 6;	//X, Y, Z, R, P, Y (Global)
-		const int size_wall_state = 3;	//x, y, z (Local)
+		const int size_lm_state = 3;	//x, y, z (Local)
 		/*struct*/
 		struct LMInfo{
 			Eigen::Vector3d Ng;
@@ -74,7 +74,7 @@ class PlanarLandmarkEKF{
 				std::vector<int> unavailable_lm_indices;
 				std::vector<LMInfo> list_lm_info_;
 			public:
-				RemoveUnavailableLM(const Eigen::VectorXd& X, const Eigen::MatrixXd& P, int size_robot_state, int size_wall_state, std::vector<LMInfo> list_lm_info);
+				RemoveUnavailableLM(const Eigen::VectorXd& X, const Eigen::MatrixXd& P, int size_robot_state, int size_lm_state, std::vector<LMInfo> list_lm_info);
 				void InputAvailableLMIndex(int lm_index);
 				void InputUnavailableLMIndex(int lm_index);
 				void Remove(Eigen::VectorXd& X, Eigen::MatrixXd& P, std::vector<LMInfo>& list_lm_info);
@@ -86,8 +86,9 @@ class PlanarLandmarkEKF{
 		sensor_msgs::Imu bias;
 		pcl::PointCloud<pcl::PointXYZ>::Ptr observation {new pcl::PointCloud<pcl::PointXYZ>};
 		pcl::PointCloud<pcl::PointXYZ>::Ptr landmarks {new pcl::PointCloud<pcl::PointXYZ>};
-		planar_landmark_ekf_slam::PlanarFeatureArray list_observation;
-		planar_landmark_ekf_slam::PlanarFeatureArray list_landmarks;
+		planar_landmark_ekf_slam::PlanarFeatureArray list_obs;
+		planar_landmark_ekf_slam::PlanarFeatureArray list_lm;
+		planar_landmark_ekf_slam::PlanarFeatureArray list_erased_lm;
 		pcl::PointCloud<pcl::InterestPoint>::Ptr d_gaussian_sphere_ {new pcl::PointCloud<pcl::InterestPoint>};
 		std::vector<LMInfo> list_lm_info;
 		std::vector<LMInfo> list_erased_lm_info;
@@ -120,20 +121,24 @@ class PlanarLandmarkEKF{
 		void CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg);
 
 		void CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg);
+		void SyncWithStateVector(void);
 		bool Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
 		void MergeLM(int parent_id, int child_id);
+		void UpdateLMInfo(int lm_id);
+		bool Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
+		void EraseLM(int index);
 
 		void SearchCorrespondObsID(std::vector<ObsInfo>& list_obs_info, int lm_id);
-		void Innovation(int lm_id, const Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
+		void Innovation_(int lm_id, const Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
 		void PushBackLMInfo(const Eigen::Vector3d& Nl);
 		/* tf::Quaternion GetRotationQuaternionBetweenVectors(const Eigen::Vector3d& Origin, const Eigen::Vector3d& Target); */
 		bool CheckNormalIsInward(const Eigen::Vector3d& Ng);
 		void JudgeWallsCanBeObserbed(void);
 		void PushBackMarkerMatchingLines(const Eigen::Vector3d& P1, const Eigen::Vector3d& P2);	//visualization
 		void ObservationUpdate(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma);
-		void UpdateLMInfo(int lm_id);
+		void UpdateLMInfo_(int lm_id);
 		void PushBackMarkerPlanes(LMInfo lm_info);	//visualization
-		void EraseLM(int index);
+		void EraseLM_(int index);
 		Eigen::Vector3d PlaneGlobalToLocal(const Eigen::Vector3d& Ng);
 		Eigen::Vector3d PlaneLocalToGlobal(const Eigen::Vector3d& Nl);
 		Eigen::Vector3d PointLocalToGlobal(const Eigen::Vector3d& Pl);
@@ -237,7 +242,7 @@ void PlanarLandmarkEKF::CallbackIMU(const sensor_msgs::ImuConstPtr& msg)
 
 void PlanarLandmarkEKF::PredictionIMU(sensor_msgs::Imu imu, double dt)
 {
-	RemoveUnavailableLM remover(X, P, size_robot_state, size_wall_state, list_lm_info);
+	RemoveUnavailableLM remover(X, P, size_robot_state, size_lm_state, list_lm_info);
 	if(mode_remove_unavailable_lm){
 		for(size_t i=0;i<list_lm_info.size();i++){
 			if(list_lm_info[i].available)	remover.InputAvailableLMIndex(i);
@@ -264,7 +269,7 @@ void PlanarLandmarkEKF::PredictionIMU(sensor_msgs::Imu imu, double dt)
 	}
 	Eigen::Vector3d Drpy = {delta_r, delta_p, delta_y};
 	
-	int num_wall = (X.size() - size_robot_state)/size_wall_state;
+	int num_wall = (X.size() - size_robot_state)/size_lm_state;
 
 	Eigen::Matrix3d Rot_rpy;	//normal rotation
 	Rot_rpy <<	1,	sin(r_)*tan(p_),	cos(r_)*tan(p_),
@@ -276,14 +281,14 @@ void PlanarLandmarkEKF::PredictionIMU(sensor_msgs::Imu imu, double dt)
 	F.segment(0, 3) = X.segment(0, 3);
 	F.segment(3, 3) = X.segment(3, 3) + Rot_rpy*Drpy;
 	for(int i=3;i<6;i++)	F(i) = PiToPi(F(i));
-	F.segment(size_robot_state, num_wall*size_wall_state) = X.segment(size_robot_state, num_wall*size_wall_state);
+	F.segment(size_robot_state, num_wall*size_lm_state) = X.segment(size_robot_state, num_wall*size_lm_state);
 
 	/*jF*/
 	Eigen::MatrixXd jF = Eigen::MatrixXd::Zero(X.size(), X.size());
 	/*jF-xyz*/
 	jF.block(0, 0, 3, 3) = Eigen::Matrix3d::Identity();
 	jF.block(0, 3, 3, 3) = Eigen::Matrix3d::Zero();
-	jF.block(0, size_robot_state, 3, num_wall*size_wall_state) = Eigen::MatrixXd::Zero(3, num_wall*size_wall_state);
+	jF.block(0, size_robot_state, 3, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(3, num_wall*size_lm_state);
 	/*jF-rpy*/
 	jF.block(3, 0, 3, 3) = Eigen::Matrix3d::Zero();
 	jF(3, 3) = 1 + cos(r_)*tan(p_)*delta_p - sin(r_)*tan(p_)*delta_y;
@@ -295,15 +300,15 @@ void PlanarLandmarkEKF::PredictionIMU(sensor_msgs::Imu imu, double dt)
 	jF(5, 3) = cos(r_)/cos(p_)*delta_p - sin(r_)/cos(p_)*delta_y;
 	jF(5, 4) = sin(r_)*sin(p_)/cos(p_)/cos(p_)*delta_p + cos(r_)*sin(p_)/cos(p_)/cos(p_)*delta_y;
 	jF(5, 5) = 1;
-	jF.block(3, size_robot_state, 3, num_wall*size_wall_state) = Eigen::MatrixXd::Zero(3, num_wall*size_wall_state);
+	jF.block(3, size_robot_state, 3, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(3, num_wall*size_lm_state);
 	/*jF-wall_xyz*/
-	jF.block(size_robot_state, size_robot_state, num_wall*size_wall_state, num_wall*size_wall_state) = Eigen::MatrixXd::Identity(num_wall*size_wall_state, num_wall*size_wall_state);
+	jF.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Identity(num_wall*size_lm_state, num_wall*size_lm_state);
 	
 	/*Q*/
 	const double sigma = 1.0e-4;
 	Eigen::MatrixXd Q = sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	Q.block(0, 0, 3, 3) = Eigen::MatrixXd::Zero(3, 3);
-	Q.block(size_robot_state, size_robot_state, num_wall*size_wall_state, num_wall*size_wall_state) = Eigen::MatrixXd::Zero(num_wall*size_wall_state, num_wall*size_wall_state);
+	Q.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(num_wall*size_lm_state, num_wall*size_lm_state);
 	
 	/*Update*/
 	X = F;
@@ -380,7 +385,7 @@ void PlanarLandmarkEKF::CallbackOdom(const nav_msgs::OdometryConstPtr& msg)
 void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 {
 	/* std::cout << "Prediction Odom" << std::endl; */
-	RemoveUnavailableLM remover(X, P, size_robot_state, size_wall_state, list_lm_info);
+	RemoveUnavailableLM remover(X, P, size_robot_state, size_lm_state, list_lm_info);
 	if(mode_remove_unavailable_lm){
 		for(size_t i=0;i<list_lm_info.size();i++){
 			if(list_lm_info[i].available)	remover.InputAvailableLMIndex(i);
@@ -397,13 +402,13 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 	double y_ = X(5);
 	Eigen::Vector3d Dxyz = {odom.twist.twist.linear.x*dt, 0, 0};
 
-	int num_wall = (X.size() - size_robot_state)/size_wall_state;
+	int num_wall = (X.size() - size_robot_state)/size_lm_state;
 
 	/*F*/
 	Eigen::VectorXd F(X.size());
 	F.segment(0, 3) = X.segment(0, 3) + GetRotationXYZMatrix(X.segment(3, 3), false)*Dxyz;
 	F.segment(3, 3) = X.segment(3, 3);
-	F.segment(size_robot_state, num_wall*size_wall_state) = X.segment(size_robot_state, num_wall*size_wall_state);
+	F.segment(size_robot_state, num_wall*size_lm_state) = X.segment(size_robot_state, num_wall*size_lm_state);
 
 	/*jF*/
 	Eigen::MatrixXd jF = Eigen::MatrixXd::Zero(X.size(), X.size());
@@ -418,19 +423,19 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 	jF(2, 3) = Dxyz(1)*(cos(r_)*cos(p_)) + Dxyz(2)*(-sin(r_)*cos(p_)) ;
 	jF(2, 4) = Dxyz(0)*(-cos(p_)) + Dxyz(1)*(-sin(r_)*sin(p_)) + Dxyz(2)*(-cos(r_)*sin(p_)) ;
 	jF(2, 5) = 0;
-	jF.block(0, size_robot_state, 3, num_wall*size_wall_state) = Eigen::MatrixXd::Zero(3, num_wall*size_wall_state);
+	jF.block(0, size_robot_state, 3, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(3, num_wall*size_lm_state);
 	/*jF-rpy*/
 	jF.block(3, 0, 3, 3) = Eigen::Matrix3d::Zero();
 	jF.block(3, 3, 3, 3) = Eigen::Matrix3d::Identity();
-	jF.block(3, size_robot_state, 3, num_wall*size_wall_state) = Eigen::MatrixXd::Zero(3, num_wall*size_wall_state);
+	jF.block(3, size_robot_state, 3, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(3, num_wall*size_lm_state);
 	/*jF-wall_xyz*/
-	jF.block(size_robot_state, size_robot_state, num_wall*size_wall_state, num_wall*size_wall_state) = Eigen::MatrixXd::Identity(num_wall*size_wall_state, num_wall*size_wall_state);
+	jF.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Identity(num_wall*size_lm_state, num_wall*size_lm_state);
 
 	/*Q*/
 	const double sigma = 1.0e-4;
 	Eigen::MatrixXd Q = sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	Q.block(3, 3, 3, 3) = Eigen::MatrixXd::Zero(3, 3);
-	Q.block(size_robot_state, size_robot_state, num_wall*size_wall_state, num_wall*size_wall_state) = Eigen::MatrixXd::Zero(num_wall*size_wall_state, num_wall*size_wall_state);
+	Q.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(num_wall*size_lm_state, num_wall*size_lm_state);
 	
 	/* std::cout << "X =" << std::endl << X << std::endl; */
 	/* std::cout << "P =" << std::endl << P << std::endl; */
@@ -446,7 +451,8 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 
 void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
 {
-	list_observation = *msg;
+	/*input*/
+	list_obs = *msg;
 	for(size_t i=0;i<msg->features.size();++i){
 		/*input*/
 		pcl::PointXYZ tmp_point;
@@ -474,22 +480,23 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 		Eigen::Vector3d MaxGlobal = PointLocalToGlobal(MaxLocal);
 		Eigen::Vector3d Ng = PlaneLocalToGlobal(Nl);
 		/*input*/
-		list_observation.features[i].min_global.x = MinGlobal(0);
-		list_observation.features[i].min_global.y = MinGlobal(0);
-		list_observation.features[i].min_global.z = MinGlobal(0);
-		list_observation.features[i].point_global.x = Ng(0);
-		list_observation.features[i].point_global.y = Ng(1);
-		list_observation.features[i].point_global.z = Ng(2);
-		list_observation.features[i].normal_is_inward = CheckNormalIsInward(Ng);
-		list_observation.features[i].corr_id = -1;
+		list_obs.features[i].min_global.x = MinGlobal(0);
+		list_obs.features[i].min_global.y = MinGlobal(0);
+		list_obs.features[i].min_global.z = MinGlobal(0);
+		list_obs.features[i].point_global.x = Ng(0);
+		list_obs.features[i].point_global.y = Ng(1);
+		list_obs.features[i].point_global.z = Ng(2);
+		list_obs.features[i].normal_is_inward = CheckNormalIsInward(Ng);
+		list_obs.features[i].corr_id = -1;
+		list_obs.features[i].was_merged = false;
 	}
 
 	/*data association*/
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
 	const double search_radius = 0.1;
-	*landmarks = StateVectorToPC();
-	for(size_t i=0;i<list_landmarks.features.size();++i){
+	SyncWithStateVector();
+	for(size_t i=0;i<list_lm.features.size();++i){
 		/*kdtree search*/
 		std::vector<int> neighbor_obs_id;
 		std::vector<float> neighbor_obs_sqrdist;
@@ -497,22 +504,95 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 		/*search correspond*/
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			int obs_id = neighbor_obs_id[j];
-			if(Judge(list_landmarks.features[i], list_observation.features[obs_id])){
-				list_landmarks.features[i].corr_id = obs_id;
-				list_landmarks.features[i].corr_dist = neighbor_obs_sqrdist[j];
-				if(list_observation.features[obs_id].corr_id == -1)	list_observation.features[obs_id].corr_id = i;
+			if(Judge(list_lm.features[i], list_obs.features[obs_id])){
+				list_lm.features[i].corr_id = obs_id;
+				list_lm.features[i].corr_dist = neighbor_obs_sqrdist[j];
+				if(list_obs.features[obs_id].corr_id == -1)	list_obs.features[obs_id].corr_id = i;
 				else{
-					int tmp_corr_lm_id = list_observation.features[obs_id].corr_id;
-					if(list_landmarks.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
+					int tmp_corr_lm_id = list_obs.features[obs_id].corr_id;
+					if(list_lm.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
 						/*compare*/
-						if(list_landmarks.features[i].corr_dist < list_landmarks.features[tmp_corr_lm_id].corr_dist)	list_observation.features[obs_id].corr_id = i;
-						else	list_observation.features[obs_id].corr_id = tmp_corr_lm_id;
+						if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
+						else	list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
 					}
 					else	MergeLM(tmp_corr_lm_id, i);
 				}
 				break;
 			}
 		}
+	}
+
+	/*new registration or update*/
+	Eigen::VectorXd Xnew(0);
+	Eigen::VectorXd Zstacked(0);
+	Eigen::VectorXd Hstacked(0);
+	Eigen::MatrixXd jHstacked(0, 0);
+	Eigen::VectorXd Diag_sigma(0);
+	for(size_t i=0;i<list_obs.features.size();++i){
+		if(list_obs.features[i].corr_id == -1){	//new landmark
+			list_lm.features.push_back(list_obs.features[i]);
+			/*stack*/
+			Eigen::Vector3d Obs(
+				list_obs.features[i].point_local.x,
+				list_obs.features[i].point_local.y,
+				list_obs.features[i].point_local.z
+			);
+			VectorVStack(Xnew, PlaneLocalToGlobal(Obs));
+		}
+		else{
+			int lm_id = list_obs.features[i].corr_id;
+			/*update landmarks info*/
+			UpdateLMInfo(lm_id);
+			/*innovation*/
+			Eigen::Vector3d Z;
+			Eigen::VectorXd H;
+			Eigen::MatrixXd jH;
+			Eigen::VectorXd Y;
+			Eigen::MatrixXd S;
+			Innovation(list_lm.features[lm_id], list_obs.features[i], Z, H, jH, Y, S);
+			/*stack*/
+			VectorVStack(Zstacked, Z);
+			VectorVStack(Hstacked, H);
+			MatrixVStack(jHstacked, jH);
+			double tmp_sigma = 0.2*100/(double)list_obs.features[i].cluster_size;
+			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
+		}
+	}
+	if(Zstacked.size()>0 && inipose_is_available)   ObservationUpdate(Zstacked, Hstacked, jHstacked, Diag_sigma);
+	/*arrange list*/
+	for(size_t i=0;i<list_lm.features.size();++i){
+		/*list lm observed simul*/
+		list_lm.features[i].list_lm_observed_simul.resize(list_lm.features.size(), false);	//keeps valuses and inputs "false" into new memories
+		if(list_lm.features[i].was_observed_in_this_scan){
+			for(size_t j=0;j<list_lm.features.size();++j){
+				if(list_lm.features[j].was_observed_in_this_scan)	list_lm.features[i].list_lm_observed_simul[j] = true;
+			}
+		}
+	}
+	/*erase*/
+	for(size_t i=0;i<list_lm.features.size();){
+		if(list_lm.features[i].was_merged)	EraseLM(i);
+		else	++i;
+	}
+}
+
+void PlanarLandmarkEKF::SyncWithStateVector(void)
+{
+	int num_lm = (X.size() - size_robot_state)/size_lm_state;
+	landmarks->points.clear();
+	for(int i=0;i<num_lm;i++){
+		/*input*/
+		pcl::PointXYZ tmp;
+		tmp.x = X(size_robot_state + i*size_lm_state);
+		tmp.y = X(size_robot_state + i*size_lm_state + 1);
+		tmp.z = X(size_robot_state + i*size_lm_state + 2);
+		landmarks->points.push_back(tmp);
+		/*input*/
+		list_lm.features[i].point_global.x = X(size_robot_state + i*size_lm_state);
+		list_lm.features[i].point_global.y = X(size_robot_state + i*size_lm_state + 1);
+		list_lm.features[i].point_global.z = X(size_robot_state + i*size_lm_state + 2);
+		list_lm.features[i].id = i;
+		list_lm.features[i].was_observed_in_this_scan = false;
 	}
 }
 
@@ -555,12 +635,118 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 
 void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 {
+	list_lm.features[child_id].was_merged = true;
+	/*min-max*/
+	if(list_lm.features[child_id].min_global.x < list_lm.features[child_id].min_global.x)	list_lm.features[child_id].min_global.x = list_lm.features[child_id].min_global.x;
+	if(list_lm.features[child_id].min_global.y < list_lm.features[child_id].min_global.y)	list_lm.features[child_id].min_global.y = list_lm.features[child_id].min_global.y;
+	if(list_lm.features[child_id].min_global.z < list_lm.features[child_id].min_global.z)	list_lm.features[child_id].min_global.z = list_lm.features[child_id].min_global.z;
+	if(list_lm.features[child_id].max_global.x > list_lm.features[child_id].max_global.x)	list_lm.features[child_id].max_global.x = list_lm.features[child_id].max_global.x;
+	if(list_lm.features[child_id].max_global.y > list_lm.features[child_id].max_global.y)	list_lm.features[child_id].max_global.y = list_lm.features[child_id].max_global.y;
+	if(list_lm.features[child_id].max_global.z > list_lm.features[child_id].max_global.z)	list_lm.features[child_id].max_global.z = list_lm.features[child_id].max_global.z;
+	/*list lm observed simul*/
+	for(size_t i=0;i<list_lm.features[child_id].list_lm_observed_simul.size();++i){
+		if(list_lm.features[child_id].list_lm_observed_simul[i]) list_lm.features[parent_id].list_lm_observed_simul[i] = list_lm.features[child_id].list_lm_observed_simul[i];
+	}
+}
+
+void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
+{
+	int obs_id = list_lm.features[lm_id].corr_id;
+	/*min-max*/
+	if(list_lm.features[lm_id].min_global.x < list_obs.features[obs_id].min_global.x)	list_lm.features[lm_id].min_global.x = list_obs.features[obs_id].min_global.x;
+	if(list_lm.features[lm_id].min_global.y < list_obs.features[obs_id].min_global.y)	list_lm.features[lm_id].min_global.y = list_obs.features[obs_id].min_global.y;
+	if(list_lm.features[lm_id].min_global.z < list_obs.features[obs_id].min_global.z)	list_lm.features[lm_id].min_global.z = list_obs.features[obs_id].min_global.z;
+	if(list_lm.features[lm_id].max_global.x > list_obs.features[obs_id].max_global.x)	list_lm.features[lm_id].max_global.x = list_obs.features[obs_id].max_global.x;
+	if(list_lm.features[lm_id].max_global.y > list_obs.features[obs_id].max_global.y)	list_lm.features[lm_id].max_global.y = list_obs.features[obs_id].max_global.y;
+	if(list_lm.features[lm_id].max_global.z > list_obs.features[obs_id].max_global.z)	list_lm.features[lm_id].max_global.z = list_obs.features[obs_id].max_global.z;
+}
+
+bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S)
+{
+	/*state*/
+	Eigen::Vector3d Ng(
+		lm.point_global.x,
+		lm.point_global.y,
+		lm.point_global.z
+	);
+	double d2 = Ng.dot(Ng);
+	Eigen::Vector3d RPY = X.segment(3, 3);
+	/*Z*/
+	Z = {
+		obs.point_local.x,
+		obs.point_local.y,
+		obs.point_local.z
+	};
+	/*H*/
+	H = PlaneGlobalToLocal(Ng);
+	/*jH*/
+	jH = Eigen::MatrixXd::Zero(Z.size(), X.size());
+	/*dH/d(XYZ)*/
+	Eigen::Vector3d rotN = GetRotationXYZMatrix(RPY, true)*Ng;
+	for(int j=0;j<Z.size();j++){
+		for(int k=0;k<3;k++)	jH(j, k) = -Ng(k)/d2*rotN(j);
+	}
+	/*dH/d(RPY)*/
+	Eigen::Vector3d delN = Ng - Ng.dot(X.segment(0, 3))/d2*Ng;
+	jH(0, 3) = 0;
+	jH(0, 4) = (-sin(RPY(1))*cos(RPY(2)))*delN(0) + (-sin(RPY(1))*sin(RPY(2)))*delN(1) + (-cos(RPY(1)))*delN(2);
+	jH(0, 5) = (-cos(RPY(1))*sin(RPY(2)))*delN(0) + (cos(RPY(1))*cos(RPY(2)))*delN(1);
+	jH(1, 3) = (cos(RPY(0))*sin(RPY(1))*cos(RPY(2)) + sin(RPY(0))*sin(RPY(2)))*delN(0) + (cos(RPY(0))*sin(RPY(1))*sin(RPY(2)) - sin(RPY(0))*cos(RPY(2)))*delN(1) + (cos(RPY(0))*cos(RPY(1)))*delN(2);
+	jH(1, 4) = (sin(RPY(0))*cos(RPY(1))*cos(RPY(2)))*delN(0) + (sin(RPY(0))*cos(RPY(1))*sin(RPY(2)))*delN(1) + (-sin(RPY(0))*sin(RPY(1)))*delN(2);
+	jH(1, 5) = (-sin(RPY(0))*sin(RPY(1))*sin(RPY(2)) - cos(RPY(0))*cos(RPY(2)))*delN(0) + (sin(RPY(0))*sin(RPY(1))*cos(RPY(2)) - cos(RPY(0))*sin(RPY(2)))*delN(1);
+	jH(2, 3) = (-sin(RPY(0))*sin(RPY(1))*cos(RPY(2)) + cos(RPY(0))*sin(RPY(2)))*delN(0) + (-sin(RPY(0))*sin(RPY(1))*sin(RPY(2)) - cos(RPY(0))*cos(RPY(2)))*delN(1) + (-sin(RPY(0))*cos(RPY(1)))*delN(2);
+	jH(2, 4) = (cos(RPY(0))*cos(RPY(1))*cos(RPY(2)))*delN(0) + (cos(RPY(0))*cos(RPY(1))*sin(RPY(2)))*delN(1) + (-cos(RPY(0))*sin(RPY(1)))*delN(2);
+	jH(2, 5) = (-cos(RPY(0))*sin(RPY(1))*sin(RPY(2)) + sin(RPY(0))*cos(RPY(2)))*delN(0) + (cos(RPY(0))*sin(RPY(1))*cos(RPY(2)) + sin(RPY(0))*sin(RPY(2)))*delN(1);
+	/*dH/d(Wall)*/
+	Eigen::Matrix3d Tmp;
+	for(int j=0;j<Z.size();j++){
+		for(int k=0;k<size_lm_state;k++){
+			if(j==k)	Tmp(j, k) = 1 - ((Ng.dot(X.segment(0, 3)) + Ng(j)*X(k))/d2 - Ng(j)*Ng.dot(X.segment(0, 3))/(d2*d2)*2*Ng(k));
+			else	Tmp(j, k) = -(Ng(j)*X(k)/d2 - Ng(j)*Ng.dot(X.segment(0, 3))/(d2*d2)*2*Ng(k));
+		}
+	}
+	jH.block(0, size_robot_state + lm.id*size_lm_state, Z.size(), size_lm_state) = GetRotationXYZMatrix(RPY, true)*Tmp;
+	/*R*/
+	const double sigma = 1.0e-2;
+	Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
+	/*Y, S*/
+	Y = Z - H;
+	S = jH*P*jH.transpose() + R;
+}
+
+void PlanarLandmarkEKF::EraseLM(int index)
+{
+	/*keep*/
+	list_erased_lm.features.push_back(list_lm.features[index]);
+	/*list*/
+	list_lm.features.erase(list_lm.features.begin() + index);
+	/*delmit point*/
+	int delimit_point = size_robot_state + index*size_lm_state;
+	int delimit_point_ = size_robot_state + (index+1)*size_lm_state;
+	/*X*/
+	Eigen::VectorXd tmp_X = X;
+	X.resize(X.size() - size_lm_state);
+	X.segment(0, delimit_point) = tmp_X.segment(0, delimit_point);
+	X.segment(delimit_point, X.size() - delimit_point) = tmp_X.segment(delimit_point_, tmp_X.size() - delimit_point_);
+	/*P*/
+	Eigen::MatrixXd tmp_P = P;
+	P.resize(P.cols() - size_lm_state, P.rows() - size_lm_state);
+	/*P-upper-left*/
+	P.block(0, 0, delimit_point, delimit_point) = tmp_P.block(0, 0, delimit_point, delimit_point);
+	/*P-upper-right*/
+	P.block(0, delimit_point, delimit_point, P.cols()-delimit_point) = tmp_P.block(0, delimit_point_, delimit_point, tmp_P.cols()-delimit_point_);
+	/*P-lower-left*/
+	P.block(delimit_point, 0, P.rows()-delimit_point, delimit_point) = tmp_P.block(delimit_point_, 0, tmp_P.rows()-delimit_point_, delimit_point);
+	/*P-lower-right*/
+	P.block(delimit_point, delimit_point, P.rows()-delimit_point, P.cols()-delimit_point) = tmp_P.block(delimit_point_, delimit_point_, tmp_P.rows()-delimit_point_, tmp_P.cols()-delimit_point_);
+	/*list LM observed at the same time*/
+	for(size_t i=0;i<list_lm.features.size();++i)	list_lm.features[i].list_lm_observed_simul.erase(list_lm.features[i].list_lm_observed_simul.begin() + index);
 }
 
 void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg)
 {
 	std::cout << "Callback D-Gaussian Sphere" << std::endl;
-	std::cout << "num_wall = " << (X.size() - size_robot_state)/size_wall_state << std::endl;
+	std::cout << "num_wall = " << (X.size() - size_robot_state)/size_lm_state << std::endl;
 	
 	pcl::fromROSMsg(*msg, *d_gaussian_sphere_);
 	std::cout << "d_gaussian_sphere_->points.size() = " << d_gaussian_sphere_->points.size() << std::endl;
@@ -572,7 +758,7 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 	planes.markers.clear();	//visualization
 
 	JudgeWallsCanBeObserbed();
-	RemoveUnavailableLM remover(X, P, size_robot_state, size_wall_state, list_lm_info);
+	RemoveUnavailableLM remover(X, P, size_robot_state, size_lm_state, list_lm_info);
 	if(mode_remove_unavailable_lm){
 		for(size_t i=0;i<list_lm_info.size();i++){
 			if(list_lm_info[i].available)	remover.InputAvailableLMIndex(i);
@@ -581,7 +767,7 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 		remover.Remove(X, P, list_lm_info);
 	}
 
-	int num_wall = (X.size() - size_robot_state)/size_wall_state;
+	int num_wall = (X.size() - size_robot_state)/size_lm_state;
 	/*matching*/
 	for(size_t i=0;i<list_lm_info.size();i++){
 		if(list_lm_info[i].available)	SearchCorrespondObsID(list_obs_info, i);
@@ -609,14 +795,14 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 		}
 		else{
 			/*update LM info*/
-			UpdateLMInfo(lm_id);
+			UpdateLMInfo_(lm_id);
 			/*judge in maching time*/
 			const int threshold_count_match = 5;
 			if(list_lm_info[lm_id].count_match>threshold_count_match)	list_lm_info[lm_id].available = true;
 			else	list_lm_info[lm_id].available = false;
 			/*stack*/
 			if(list_lm_info[lm_id].available){
-				PushBackMarkerMatchingLines(X.segment(size_robot_state + lm_id*size_wall_state, size_wall_state), PointLocalToGlobal(Nl));
+				PushBackMarkerMatchingLines(X.segment(size_robot_state + lm_id*size_lm_state, size_lm_state), PointLocalToGlobal(Nl));
 				VectorVStack(Zstacked, Nl);
 				VectorVStack(Hstacked, list_obs_info[i].H);
 				MatrixVStack(jHstacked, list_obs_info[i].jH);
@@ -626,7 +812,7 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 				std::cout << "tmp_sigma = " << tmp_sigma << std::endl;
 				
 				/*test*/
-				// Innovation(lm_id, Nl, list_obs_info[i].H, list_obs_info[i].jH, list_obs_info[i].Y, list_obs_info[i].S);
+				// Innovation_(lm_id, Nl, list_obs_info[i].H, list_obs_info[i].jH, list_obs_info[i].Y, list_obs_info[i].S);
 				// ObservationUpdate(Nl, list_obs_info[i].H, list_obs_info[i].jH);
 			}
 		}
@@ -674,7 +860,7 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
 	/*delete marged LM*/
 	for(size_t i=0;i<list_lm_info.size();){
-		if(list_lm_info[i].was_merged || list_lm_info[i].was_erased)	EraseLM(i);
+		if(list_lm_info[i].was_merged || list_lm_info[i].was_erased)	EraseLM_(i);
 		else i++;
 	}
 	for(size_t i=0;i<list_erased_lm_info.size();i++)	PushBackMarkerPlanes(list_erased_lm_info[i]);
@@ -713,7 +899,7 @@ void PlanarLandmarkEKF::SearchCorrespondObsID(std::vector<ObsInfo>& list_obs_inf
 		Eigen::MatrixXd jHi;
 		Eigen::VectorXd Yi;
 		Eigen::MatrixXd Si;
-		Innovation(lm_id, Zi, Hi, jHi, Yi, Si);
+		Innovation_(lm_id, Zi, Hi, jHi, Yi, Si);
 
 		double mahalanobis_dist = Yi.transpose()*Si.inverse()*Yi;
 		double euclidean_dist = Yi.norm();	//test
@@ -803,9 +989,9 @@ void PlanarLandmarkEKF::SearchCorrespondObsID(std::vector<ObsInfo>& list_obs_inf
 	}
 }
 
-void PlanarLandmarkEKF::Innovation(int lm_id, const Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S)
+void PlanarLandmarkEKF::Innovation_(int lm_id, const Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S)
 {
-	Eigen::Vector3d Ng = X.segment(size_robot_state + lm_id*size_wall_state, size_wall_state);
+	Eigen::Vector3d Ng = X.segment(size_robot_state + lm_id*size_lm_state, size_lm_state);
 	Eigen::Vector3d RPY = X.segment(3, 3);
 	double d2 = Ng.dot(Ng);
 	/*H*/
@@ -831,12 +1017,12 @@ void PlanarLandmarkEKF::Innovation(int lm_id, const Eigen::Vector3d& Z, Eigen::V
 	/*dH/d(Wall)*/
 	Eigen::Matrix3d Tmp;
 	for(int j=0;j<Z.size();j++){
-		for(int k=0;k<size_wall_state;k++){
+		for(int k=0;k<size_lm_state;k++){
 			if(j==k)	Tmp(j, k) = 1 - ((Ng.dot(X.segment(0, 3)) + Ng(j)*X(k))/d2 - Ng(j)*Ng.dot(X.segment(0, 3))/(d2*d2)*2*Ng(k));
 			else	Tmp(j, k) = -(Ng(j)*X(k)/d2 - Ng(j)*Ng.dot(X.segment(0, 3))/(d2*d2)*2*Ng(k));
 		}
 	}
-	jH.block(0, size_robot_state + lm_id*size_wall_state, Z.size(), size_wall_state) = GetRotationXYZMatrix(RPY, true)*Tmp;
+	jH.block(0, size_robot_state + lm_id*size_lm_state, Z.size(), size_lm_state) = GetRotationXYZMatrix(RPY, true)*Tmp;
 	/*R*/
 	const double sigma = 1.0e-2;
 	Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
@@ -902,7 +1088,7 @@ void PlanarLandmarkEKF::JudgeWallsCanBeObserbed(void)
 	const double large_tolerance = 5.0;
 	
 	for(size_t i=0;i<list_lm_info.size();i++){
-		Eigen::Vector3d Ng = X.segment(size_robot_state+i*size_wall_state, size_wall_state);
+		Eigen::Vector3d Ng = X.segment(size_robot_state+i*size_lm_state, size_lm_state);
 		/*judge in direction of normal*/
 		if(list_lm_info[i].is_inward!=CheckNormalIsInward(Ng))	list_lm_info[i].available = false;
 		else if(list_lm_info[i].was_merged || list_lm_info[i].was_erased)	list_lm_info[i].available = false;	//test
@@ -939,9 +1125,7 @@ void PlanarLandmarkEKF::PushBackMarkerMatchingLines(const Eigen::Vector3d& P1, c
 void PlanarLandmarkEKF::ObservationUpdate(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma)
 {
 	Eigen::VectorXd Y = Z - H;
-	// const double sigma = 1.0e-1;
 	// const double sigma = 1.2e-1;	//using floor
-	const double sigma = 1.0e-1;	//test
 	// Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
 	Eigen::MatrixXd R = Diag_sigma.asDiagonal();
 	Eigen::MatrixXd S = jH*P*jH.transpose() + R;
@@ -963,9 +1147,9 @@ Eigen::Vector3d PlanarLandmarkEKF::PlaneGlobalToLocal(const Eigen::Vector3d& Ng)
 	return Nl;
 }
 
-void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
+void PlanarLandmarkEKF::UpdateLMInfo_(int lm_id)
 {
-	Eigen::Vector3d Ng = X.segment(size_robot_state + lm_id*size_wall_state, size_wall_state);
+	Eigen::Vector3d Ng = X.segment(size_robot_state + lm_id*size_lm_state, size_lm_state);
 	/*count*/
 	list_lm_info[lm_id].was_observed_in_this_scan = true;
 	list_lm_info[lm_id].count_match += 1;
@@ -1077,23 +1261,23 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(LMInfo lm_info)
 	planes.markers.push_back(tmp);
 }
 
-void PlanarLandmarkEKF::EraseLM(int index)
+void PlanarLandmarkEKF::EraseLM_(int index)
 {
 	/*keep*/
 	list_erased_lm_info.push_back(list_lm_info[index]);
 	/*list*/
 	list_lm_info.erase(list_lm_info.begin() + index);
 	/*delmit point*/
-	int delimit_point = size_robot_state + index*size_wall_state;
-	int delimit_point_ = size_robot_state + (index+1)*size_wall_state;
+	int delimit_point = size_robot_state + index*size_lm_state;
+	int delimit_point_ = size_robot_state + (index+1)*size_lm_state;
 	/*X*/
 	Eigen::VectorXd tmp_X = X;
-	X.resize(X.size() - size_wall_state);
+	X.resize(X.size() - size_lm_state);
 	X.segment(0, delimit_point) = tmp_X.segment(0, delimit_point);
 	X.segment(delimit_point, X.size() - delimit_point) = tmp_X.segment(delimit_point_, tmp_X.size() - delimit_point_);
 	/*P*/
 	Eigen::MatrixXd tmp_P = P;
-	P.resize(P.cols() - size_wall_state, P.rows() - size_wall_state);
+	P.resize(P.cols() - size_lm_state, P.rows() - size_lm_state);
 	/*P-upper-left*/
 	P.block(0, 0, delimit_point, delimit_point) = tmp_P.block(0, 0, delimit_point, delimit_point);
 	/*P-upper-right*/
@@ -1242,13 +1426,13 @@ geometry_msgs::PoseStamped PlanarLandmarkEKF::StateVectorToPoseStamped(void)
 pcl::PointCloud<pcl::PointXYZ> PlanarLandmarkEKF::StateVectorToPC(void)
 {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pc (new pcl::PointCloud<pcl::PointXYZ>);
-	int num_wall = (X.size() - size_robot_state)/size_wall_state;
+	int num_wall = (X.size() - size_robot_state)/size_lm_state;
 	for(int i=0;i<num_wall;i++){
 		if(list_lm_info[i].available){
 			pcl::PointXYZ tmp;
-			tmp.x = X(size_robot_state + i*size_wall_state);
-			tmp.y = X(size_robot_state + i*size_wall_state + 1);
-			tmp.z = X(size_robot_state + i*size_wall_state + 2);
+			tmp.x = X(size_robot_state + i*size_lm_state);
+			tmp.y = X(size_robot_state + i*size_lm_state + 1);
+			tmp.z = X(size_robot_state + i*size_lm_state + 2);
 			pc->points.push_back(tmp);
 		}
 	}
@@ -1301,12 +1485,12 @@ double PlanarLandmarkEKF::PiToPi(double angle)
 	return atan2(sin(angle), cos(angle)); 
 }
 
-PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(const Eigen::VectorXd& X, const Eigen::MatrixXd& P, int size_robot_state, int size_wall_state, std::vector<LMInfo> list_lm_info)
+PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(const Eigen::VectorXd& X, const Eigen::MatrixXd& P, int size_robot_state, int size_lm_state, std::vector<LMInfo> list_lm_info)
 {
 	X_ = X;
 	P_ = P;
 	size_robot_state_ = size_robot_state;
-	size_wall_state_ = size_wall_state;
+	size_wall_state_ = size_lm_state;
 	list_lm_info_ = list_lm_info;
 }
 void PlanarLandmarkEKF::RemoveUnavailableLM::InputAvailableLMIndex(int lm_index)

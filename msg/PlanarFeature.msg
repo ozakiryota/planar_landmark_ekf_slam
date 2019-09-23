@@ -6,7 +6,9 @@ geometry_msgs/Vector3 min_global
 geometry_msgs/Vector3 max_global
 int64 cluster_size
 bool normal_is_inward
+int64 id
 int64 corr_id
 int64 corr_dist
 int64[] list_lm_observed_simul
+bool was_observed_in_this_scan
 bool was_merged
