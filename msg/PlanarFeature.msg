@@ -4,6 +4,8 @@ geometry_msgs/Vector3 min_local
 geometry_msgs/Vector3 max_local
 geometry_msgs/Vector3 min_global
 geometry_msgs/Vector3 max_global
+geometry_msgs/Point centroid
+geometry_msgs/Pose origin
 int64 cluster_size
 bool normal_is_inward
 int64 id
