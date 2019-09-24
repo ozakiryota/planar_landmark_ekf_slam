@@ -138,7 +138,8 @@ class PlanarLandmarkEKF{
 		void PushBackMarkerMatchingLines(const Eigen::Vector3d& P1, const Eigen::Vector3d& P2);	//visualization
 		void ObservationUpdate(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma);
 		void UpdateLMInfo_(int lm_id);
-		void PushBackMarkerPlanes(LMInfo lm_info);	//visualization
+		void PushBackMarkerPlanes_(LMInfo lm_info);	//visualization
+		void PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm);
 		void EraseLM_(int index);
 		Eigen::Vector3d PlaneGlobalToLocal(const Eigen::Vector3d& Ng);
 		Eigen::Vector3d PlaneLocalToGlobal(const Eigen::Vector3d& Nl);
@@ -501,6 +502,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 		list_obs.features[i].point_global.z = Ng(2);
 		list_obs.features[i].normal_is_inward = CheckNormalIsInward(Ng);
 		list_obs.features[i].corr_id = -1;
+		list_obs.features[i].was_observed_in_this_scan = true;
 		list_obs.features[i].was_merged = false;
 	}
 
@@ -637,22 +639,34 @@ void PlanarLandmarkEKF::SyncWithStateVector(void)
 		Eigen::Vector3d NgToCent = Cent - Ng;
 		Eigen::Vector3d Origin = Ng + (NgToCent - NgToCent.dot(Ng)/Ng.norm()/Ng.norm()*Ng);
 		/*visual origin orientation*/
+		std::vector<Eigen::Vector3d> tmp_axes(3);
+		tmp_axes[0] = -Ng.normalized();
+		tmp_axes[1] = (Origin - Ng).normalized();
+		tmp_axes[2] = (tmp_axes[0].cross(tmp_axes[1])).normalized();
 		Eigen::Matrix3d Axes;
-		/* Axes_wall_global.block(0, i, 3, 1) */
-		Axes.block(0, 0, 3, 1) = Ng.normalized();
-		Axes.block(0, 1, 3, 1) = Origin.normalized();
-		Axes.block(0, 2, 3, 1) = (Ng.cross(Origin)).normalized();
+		for(size_t j=0;j<tmp_axes.size();++j)	Axes.block(0, j, 3, 1) = tmp_axes[j];
+		/* Axes.block(0, 0, 3, 1) = -Ng.normalized(); */
+		/* Axes.block(0, 1, 3, 1) = (Origin - Ng).normalized(); */
+		/* Axes.block(0, 2, 3, 1) = (-Ng.cross(Origin - Ng)).normalized(); */
 		Eigen::Quaterniond q_orientation(Axes);
 		q_orientation.normalize();
 		/*input*/
 		list_lm.features[i].origin.position.x = Origin(0);
 		list_lm.features[i].origin.position.y = Origin(1);
 		list_lm.features[i].origin.position.z = Origin(2);
+		// list_lm.features[i].origin.position.x = list_lm.features[i].centroid.x;
+		// list_lm.features[i].origin.position.y = list_lm.features[i].centroid.y;
+		// list_lm.features[i].origin.position.z = list_lm.features[i].centroid.z;
 		list_lm.features[i].origin.orientation = QuatEigenToMsg(q_orientation);
-
-		list_lm.features[i].origin.position.x = list_lm.features[i].centroid.x;
-		list_lm.features[i].origin.position.y = list_lm.features[i].centroid.y;
-		list_lm.features[i].origin.position.z = list_lm.features[i].centroid.z;
+		/*visual scale*/
+		Eigen::Vector3d MinMax(
+			list_lm.features[i].max_global.x - list_lm.features[i].min_global.x,
+			list_lm.features[i].max_global.y - list_lm.features[i].min_global.y,
+			list_lm.features[i].max_global.z - list_lm.features[i].min_global.z
+		);
+		list_lm.features[i].scale.x = (MinMax.dot(tmp_axes[0])/tmp_axes[0].norm()/tmp_axes[0].norm()*tmp_axes[0]).norm();
+		list_lm.features[i].scale.y = (MinMax.dot(tmp_axes[1])/tmp_axes[1].norm()/tmp_axes[1].norm()*tmp_axes[1]).norm();
+		list_lm.features[i].scale.z = (MinMax.dot(tmp_axes[2])/tmp_axes[2].norm()/tmp_axes[2].norm()*tmp_axes[2]).norm();
 
 
 		/* #<{(|origin-position|)}># */
@@ -943,7 +957,7 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 				if(list_lm_info[j].was_observed_in_this_scan)	list_lm_info[i].list_lm_observed_simul[j] = true;	//<-eraseと一緒にこれも更新しないとおかしい
 			}
 		}
-		PushBackMarkerPlanes(list_lm_info[i]);
+		PushBackMarkerPlanes_(list_lm_info[i]);
 		/*reset*/
 		list_lm_info[i].was_observed_in_this_scan = false;
 	}
@@ -959,7 +973,7 @@ void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2Co
 		if(list_lm_info[i].was_merged || list_lm_info[i].was_erased)	EraseLM_(i);
 		else i++;
 	}
-	for(size_t i=0;i<list_erased_lm_info.size();i++)	PushBackMarkerPlanes(list_erased_lm_info[i]);
+	for(size_t i=0;i<list_erased_lm_info.size();i++)	PushBackMarkerPlanes_(list_erased_lm_info[i]);
 
 	/*test*/
 	/* const int highlight_index = 3; */
@@ -1286,7 +1300,7 @@ void PlanarLandmarkEKF::UpdateLMInfo_(int lm_id)
 	quaternionTFToMsg((q_rotation*q_origin_orientation_old).normalized(), list_lm_info[lm_id].origin.orientation);
 }
 
-void PlanarLandmarkEKF::PushBackMarkerPlanes(LMInfo lm_info)
+void PlanarLandmarkEKF::PushBackMarkerPlanes_(LMInfo lm_info)
 {
 	const double thickness = 0.1;
 	double width = lm_info.observed_range[1][1] - lm_info.observed_range[1][0];
@@ -1504,12 +1518,45 @@ void PlanarLandmarkEKF::Publication(void)
 	/* for(size_t i=0;i<list_lm_info.size();i++)	if(list_lm_info[i].available)	landmark_origins.poses.push_back(list_lm_info[i].origin); */
 	for(size_t i=0;i<list_lm.features.size();++i)	landmark_origins.poses.push_back(list_lm.features[i].origin);
 	pub_posearray.publish(landmark_origins);
+
+	/*planes*/
+	planes.markers.clear();
+	for(size_t i=0;i<list_lm.features.size();++i)	PushBackMarkerPlanes(list_lm.features[i]);
 	pub_markerarray.publish(planes);
 
 	/*variance*/
 	std_msgs::Float64MultiArray variance_pub;
 	for(int i=0;i<P.cols();i++)	variance_pub.data.push_back(P(i, i));
 	pub_variance.publish(variance_pub);
+}
+
+void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm)
+{
+	const double thickness = 0.1;
+
+	visualization_msgs::Marker tmp;
+	tmp.header.frame_id = "/odom";
+	tmp.header.stamp = time_imu_now;
+	tmp.ns = "planes";
+	tmp.id = planes.markers.size();
+	tmp.action = visualization_msgs::Marker::ADD;
+	tmp.pose = lm.origin;
+	tmp.type = visualization_msgs::Marker::CUBE;
+	tmp.scale = lm.scale;
+	if(lm.was_observed_in_this_scan){
+		tmp.color.r = 1.0;
+		tmp.color.g = 0.0;
+		tmp.color.b = 0.0;
+		tmp.color.a = 0.9;
+	}
+	else{
+		tmp.color.r = 0.0;
+		tmp.color.g = 0.0;
+		tmp.color.b = 1.0;
+		tmp.color.a = 0.9;
+	}
+
+	planes.markers.push_back(tmp);
 }
 
 geometry_msgs::PoseStamped PlanarLandmarkEKF::StateVectorToPoseStamped(void)
