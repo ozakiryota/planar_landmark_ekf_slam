@@ -18,7 +18,7 @@
 	<node pkg="gyrodometry" name="initial_alignment" type="initial_alignment" output="screen">
 		<param name="initial_orientation_is_0001" type="bool" value="true"/>
 	</node>
-	<node pkg="planar_landmark_ekf_slam" name="planar_normal_estimation" type="planar_normal_estimation" output="screen">
+	<node pkg="planar_landmark_ekf_slam" name="planar_normal_estimation" type="planar_normal_estimation">
 		<param name="skip" type="int" value="3"/>
 		<param name="search_radius_ratio" type="double" value="0.09"/>
 		<param name="min_serach_radius" type="double" value="0.1"/>
@@ -26,7 +26,7 @@
 		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
 		<!-- <param name="mode_selection" type="bool" value="false"/> -->
 	</node>
-	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction" output="screen">
+	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction">
 		<param name="cluster_tolerance" type="double" value="0.1"/>
 		<param name="min_cluster_size" type="int" value="150"/>
 	</node>
@@ -35,7 +35,7 @@
 	</node>
 
 	<!-- comparisons -->
-	<node pkg="gyrodometry" name="gyrodometry3d" type="gyrodometry3d" output="screen">
+	<node pkg="gyrodometry" name="gyrodometry3d" type="gyrodometry3d">
 		<remap from="/odom" to="/tinypower/odom/republished"/>
 	</node>
 	<!-- <include file="$(find loam_velodyne)/launch/hector_loam_velodyne.launch"/> -->

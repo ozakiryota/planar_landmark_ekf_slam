@@ -814,7 +814,7 @@ Eigen::Vector3d PlanarLandmarkEKF::PointLocalToGlobal(const Eigen::Vector3d& Pl)
 
 void PlanarLandmarkEKF::Publication(void)
 {
-	std::cout << "Publication" << std::endl;
+	/* std::cout << "Publication" << std::endl; */
 
 	for(int i=3;i<6;i++){	//test
 		if(fabs(X(i))>M_PI){
