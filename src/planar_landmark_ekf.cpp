@@ -32,7 +32,8 @@ class PlanarLandmarkEKF{
 		/*publish*/
 		tf::TransformBroadcaster tf_broadcaster;
 		ros::Publisher pub_pose;
-		ros::Publisher pub_pc_lm;	////visualize
+		ros::Publisher pub_pc_lm_global;	//visualize
+		ros::Publisher pub_pc_lm_local;	//visualize
 		ros::Publisher pub_markerarray;	//visualize
 		ros::Publisher pub_posearray;	//visualize
 		ros::Publisher pub_variance;	//visualize
@@ -108,9 +109,10 @@ PlanarLandmarkEKF::PlanarLandmarkEKF()
 	sub_odom = nh.subscribe("/tinypower/odom", 1, &PlanarLandmarkEKF::CallbackOdom, this);
 	sub_features = nh.subscribe("/features", 1, &PlanarLandmarkEKF::CallbackFeatures, this);
 	/*publish*/
-	pub_pose = nh.advertise<geometry_msgs::PoseStamped>("/wall_ekf_slam/pose", 1);
+	pub_pose = nh.advertise<geometry_msgs::PoseStamped>("/ekf/pose", 1);
 	pub_posearray = nh.advertise<geometry_msgs::PoseArray>("/landmark_origins", 1);
-	pub_pc_lm = nh.advertise<sensor_msgs::PointCloud2>("/d_gaussian_sphere_est", 1);
+	pub_pc_lm_global = nh.advertise<sensor_msgs::PointCloud2>("/landmark_global", 1);
+	pub_pc_lm_local = nh.advertise<sensor_msgs::PointCloud2>("/landmark_local", 1);
 	pub_markerarray = nh.advertise<visualization_msgs::MarkerArray>("planes", 1);
 	pub_variance = nh.advertise<std_msgs::Float64MultiArray>("variance", 1);
 	/*state*/
@@ -320,6 +322,8 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
 {
 	std::cout << "Callback Features" << std::endl;
+	std::cout << "msg->features.size() = " << msg->features.size() << std::endl;
+	std::cout << "list_lm.features.size() = " << list_lm.features.size() << std::endl;
 
 	/*input*/
 	time_publish = msg->header.stamp;
@@ -589,10 +593,9 @@ void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
 
 bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S)
 {
-	std::cout << "Innovation" << std::endl;
+	/* std::cout << "Innovation" << std::endl; */
 
 	/*state*/
-	std::cout << "state" << std::endl;
 	Eigen::Vector3d Ng(
 		lm.point_global.x,
 		lm.point_global.y,
@@ -601,26 +604,21 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	double d2 = Ng.dot(Ng);
 	Eigen::Vector3d RPY = X.segment(3, 3);
 	/*Z*/
-	std::cout << "Z" << std::endl;
 	Z = {
 		obs.point_local.x,
 		obs.point_local.y,
 		obs.point_local.z
 	};
 	/*H*/
-	std::cout << "H" << std::endl;
 	H = PlaneGlobalToLocal(Ng);
 	/*jH*/
-	std::cout << "jH" << std::endl;
 	jH = Eigen::MatrixXd::Zero(Z.size(), X.size());
 	/*dH/d(XYZ)*/
-	std::cout << "dH/d(XYZ)" << std::endl;
 	Eigen::Vector3d rotN = GetRotationXYZMatrix(RPY, true)*Ng;
 	for(int j=0;j<Z.size();j++){
 		for(int k=0;k<3;k++)	jH(j, k) = -Ng(k)/d2*rotN(j);
 	}
 	/*dH/d(RPY)*/
-	std::cout << "dH/d(RPY)" << std::endl;
 	Eigen::Vector3d delN = Ng - Ng.dot(X.segment(0, 3))/d2*Ng;
 	jH(0, 3) = 0;
 	jH(0, 4) = (-sin(RPY(1))*cos(RPY(2)))*delN(0) + (-sin(RPY(1))*sin(RPY(2)))*delN(1) + (-cos(RPY(1)))*delN(2);
@@ -632,7 +630,6 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	jH(2, 4) = (cos(RPY(0))*cos(RPY(1))*cos(RPY(2)))*delN(0) + (cos(RPY(0))*cos(RPY(1))*sin(RPY(2)))*delN(1) + (-cos(RPY(0))*sin(RPY(1)))*delN(2);
 	jH(2, 5) = (-cos(RPY(0))*sin(RPY(1))*sin(RPY(2)) + sin(RPY(0))*cos(RPY(2)))*delN(0) + (cos(RPY(0))*sin(RPY(1))*cos(RPY(2)) + sin(RPY(0))*sin(RPY(2)))*delN(1);
 	/*dH/d(LM)*/
-	std::cout << "dH/d(LM)" << std::endl;
 	Eigen::Matrix3d Tmp;
 	for(int j=0;j<Z.size();j++){
 		for(int k=0;k<size_lm_state;k++){
@@ -642,14 +639,11 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	}
 	jH.block(0, size_robot_state + lm.id*size_lm_state, Z.size(), size_lm_state) = GetRotationXYZMatrix(RPY, true)*Tmp;
 	/*R*/
-	std::cout << "R" << std::endl;
 	const double sigma = 1.0e-2;
 	Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
 	/*Y, S*/
 	Y = Z - H;
 	S = jH*P*jH.transpose() + R;
-
-	std::cout << "Innovation end" << std::endl;
 }
 
 void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
@@ -868,7 +862,7 @@ void PlanarLandmarkEKF::Publication(void)
 	pcl::toROSMsg(*landmarks_global, pc_pub);
 	pc_pub.header.frame_id = "/odom";
 	pc_pub.header.stamp = time_publish;
-	pub_pc_lm.publish(pc_pub);
+	pub_pc_lm_global.publish(pc_pub);
 
 	/*landmark origins*/
 	landmark_origins.header.frame_id = "/odom";
@@ -882,6 +876,13 @@ void PlanarLandmarkEKF::Publication(void)
 	std_msgs::Float64MultiArray variance_pub;
 	for(int i=0;i<P.cols();i++)	variance_pub.data.push_back(P(i, i));
 	pub_variance.publish(variance_pub);
+
+	/*pc*/
+	sensor_msgs::PointCloud2 pc_lm_pred;
+	pcl::toROSMsg(*landmarks_local, pc_lm_pred);
+	pc_lm_pred.header.frame_id = "/velodyne";
+	pc_lm_pred.header.stamp = time_publish;
+	pub_pc_lm_local.publish(pc_lm_pred);
 }
 
 void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm)
