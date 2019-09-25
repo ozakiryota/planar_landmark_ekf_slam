@@ -75,14 +75,16 @@ class PlanarLandmarkEKF{
 		void PredictionOdom(nav_msgs::Odometry odom, double dt);
 		void CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg);
 		void DataSyncBeforeAssoc(void);
+		void DataAssociation(void);
 		bool Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
 		void MergeLM(int parent_id, int child_id);
+		void UpdateFeatures(void);
 		void UpdateLMInfo(int lm_id);
 		bool Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
 		void DataSyncAfterAssoc(void);
 		void PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm);
 		void EraseLM(int index);
-		void ObservationUpdate(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma);
+		void UpdateComputation(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma);
 		bool CheckNormalIsInward(const Eigen::Vector3d& Ng);
 		Eigen::Vector3d PlaneGlobalToLocal(const Eigen::Vector3d& Ng);
 		Eigen::Vector3d PlaneLocalToGlobal(const Eigen::Vector3d& Nl);
@@ -317,93 +319,19 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 
 void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
 {
-	/* std::cout << "Callback Features" << std::endl; */
+	std::cout << "Callback Features" << std::endl;
 
 	/*input*/
 	time_publish = msg->header.stamp;
 	list_obs = *msg;
 	DataSyncBeforeAssoc();
-
 	/*data association*/
-	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-	kdtree.setInputCloud(observation);
-	/* const double search_radius = 0.1; */
-	for(size_t i=0;i<list_lm.features.size();++i){
-		/*kdtree search*/
-		std::vector<int> neighbor_obs_id;
-		std::vector<float> neighbor_obs_sqrdist;
-		kdtree.radiusSearch(landmarks_local->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
-		for(size_t j=0;j<neighbor_obs_id.size();++j){
-			std::cout << "i=" << i << ", j=" << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
-		}
-		/*search correspond*/
-		for(size_t j=0;j<neighbor_obs_id.size();++j){
-			int obs_id = neighbor_obs_id[j];
-			if(Judge(list_lm.features[i], list_obs.features[obs_id])){
-				list_lm.features[i].corr_id = obs_id;
-				list_lm.features[i].corr_dist = sqrt(neighbor_obs_sqrdist[j]);
-				if(list_obs.features[obs_id].corr_id == -1)	list_obs.features[obs_id].corr_id = i;
-				else{
-					int tmp_corr_lm_id = list_obs.features[obs_id].corr_id;
-					if(list_lm.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
-						/*compare*/
-						if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
-						else	list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
-					}
-					else	MergeLM(tmp_corr_lm_id, i);
-				}
-				break;
-			}
-		}
-	}
-
-	/*stack (new registration or update)*/
-	Eigen::VectorXd Xnew(0);
-	Eigen::VectorXd Zstacked(0);
-	Eigen::VectorXd Hstacked(0);
-	Eigen::MatrixXd jHstacked(0, 0);
-	Eigen::VectorXd Diag_sigma(0);
-	for(size_t i=0;i<list_obs.features.size();++i){
-		if(list_obs.features[i].corr_id == -1){	//new landmark
-			list_lm.features.push_back(list_obs.features[i]);
-			/*stack*/
-			Eigen::Vector3d Obs(
-				list_obs.features[i].point_global.x,
-				list_obs.features[i].point_global.y,
-				list_obs.features[i].point_global.z
-			);
-			VectorVStack(Xnew, Obs);
-		}
-		else{	//associated observation
-			int lm_id = list_obs.features[i].corr_id;
-			/*update landmarks info*/
-			UpdateLMInfo(lm_id);
-			/*innovation*/
-			Eigen::Vector3d Z;
-			Eigen::VectorXd H;
-			Eigen::MatrixXd jH;
-			Eigen::VectorXd Y;
-			Eigen::MatrixXd S;
-			Innovation(list_lm.features[lm_id], list_obs.features[i], Z, H, jH, Y, S);
-			/*stack*/
-			VectorVStack(Zstacked, Z);
-			VectorVStack(Hstacked, H);
-			MatrixVStack(jHstacked, jH);
-			double tmp_sigma = 0.2*100/(double)list_obs.features[i].cluster_size;
-			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
-		}
-	}
-	/*update*/
-	if(Zstacked.size()>0 && inipose_is_available)   ObservationUpdate(Zstacked, Hstacked, jHstacked, Diag_sigma);
-	/*new registration*/
-	X.conservativeResize(X.size() + Xnew.size());
-	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
-	Eigen::MatrixXd Ptmp = P;
-	const double initial_lm_sigma = 0.01;
-	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
-	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
+	DataAssociation();
+	/*observation uodate*/
+	UpdateFeatures();
 	/*Data Synchronization*/
 	DataSyncAfterAssoc();
+	std::cout << "erase" << std::endl;
 	/*erase*/
 	for(size_t i=0;i<list_lm.features.size();){
 		if(list_lm.features[i].was_merged)	EraseLM(i);
@@ -468,6 +396,41 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 	/*landmarks*/
 	for(int i=0;i<list_lm.features.size();++i){
 		list_lm.features[i].was_observed_in_this_scan = false;
+	}
+}
+
+void PlanarLandmarkEKF::DataAssociation(void)
+{
+	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+	kdtree.setInputCloud(observation);
+	/* const double search_radius = 0.1; */
+	for(size_t i=0;i<list_lm.features.size();++i){
+		/*kdtree search*/
+		std::vector<int> neighbor_obs_id;
+		std::vector<float> neighbor_obs_sqrdist;
+		kdtree.radiusSearch(landmarks_local->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
+		for(size_t j=0;j<neighbor_obs_id.size();++j){
+			std::cout << "i=" << i << ", j=" << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
+		}
+		/*search correspond*/
+		for(size_t j=0;j<neighbor_obs_id.size();++j){
+			int obs_id = neighbor_obs_id[j];
+			if(Judge(list_lm.features[i], list_obs.features[obs_id])){
+				list_lm.features[i].corr_id = obs_id;
+				list_lm.features[i].corr_dist = sqrt(neighbor_obs_sqrdist[j]);
+				if(list_obs.features[obs_id].corr_id == -1)	list_obs.features[obs_id].corr_id = i;
+				else{
+					int tmp_corr_lm_id = list_obs.features[obs_id].corr_id;
+					if(list_lm.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
+						/*compare*/
+						if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
+						else	list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
+					}
+					else	MergeLM(tmp_corr_lm_id, i);
+				}
+				break;
+			}
+		}
 	}
 }
 
@@ -557,6 +520,58 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 	for(size_t i=0;i<list_lm.features[child_id].list_lm_observed_simul.size();++i){
 		if(list_lm.features[child_id].list_lm_observed_simul[i]) list_lm.features[parent_id].list_lm_observed_simul[i] = list_lm.features[child_id].list_lm_observed_simul[i];
 	}
+}
+
+void PlanarLandmarkEKF::UpdateFeatures(void)
+{
+	std::cout << "Update features" << std::endl;
+
+	/*stack (new registration or update)*/
+	Eigen::VectorXd Xnew(0);
+	Eigen::VectorXd Zstacked(0);
+	Eigen::VectorXd Hstacked(0);
+	Eigen::MatrixXd jHstacked(0, 0);
+	Eigen::VectorXd Diag_sigma(0);
+	for(size_t i=0;i<list_obs.features.size();++i){
+		if(list_obs.features[i].corr_id == -1){	//new landmark
+			list_lm.features.push_back(list_obs.features[i]);
+			/*stack*/
+			Eigen::Vector3d Obs(
+				list_obs.features[i].point_global.x,
+				list_obs.features[i].point_global.y,
+				list_obs.features[i].point_global.z
+			);
+			VectorVStack(Xnew, Obs);
+		}
+		else{	//associated observation
+			int lm_id = list_obs.features[i].corr_id;
+			/*update landmarks info*/
+			UpdateLMInfo(lm_id);
+			/*innovation*/
+			Eigen::Vector3d Z;
+			Eigen::VectorXd H;
+			Eigen::MatrixXd jH;
+			Eigen::VectorXd Y;
+			Eigen::MatrixXd S;
+			Innovation(list_lm.features[lm_id], list_obs.features[i], Z, H, jH, Y, S);
+			/*stack*/
+			VectorVStack(Zstacked, Z);
+			VectorVStack(Hstacked, H);
+			MatrixVStack(jHstacked, jH);
+			double tmp_sigma = 0.2*100/(double)list_obs.features[i].cluster_size;
+			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
+		}
+	}
+	std::cout << "update" << std::endl;
+	/*update*/
+	if(Zstacked.size()>0 && inipose_is_available)   UpdateComputation(Zstacked, Hstacked, jHstacked, Diag_sigma);
+	/*new registration*/
+	X.conservativeResize(X.size() + Xnew.size());
+	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
+	Eigen::MatrixXd Ptmp = P;
+	const double initial_lm_sigma = 0.01;
+	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
+	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
 }
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
@@ -758,7 +773,7 @@ bool PlanarLandmarkEKF::CheckNormalIsInward(const Eigen::Vector3d& Ng)
 	}
 }
 
-void PlanarLandmarkEKF::ObservationUpdate(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma)
+void PlanarLandmarkEKF::UpdateComputation(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma)
 {
 	Eigen::VectorXd Y = Z - H;
 	// const double sigma = 1.2e-1;	//using floor
@@ -799,7 +814,7 @@ Eigen::Vector3d PlanarLandmarkEKF::PointLocalToGlobal(const Eigen::Vector3d& Pl)
 
 void PlanarLandmarkEKF::Publication(void)
 {
-	/* std::cout << "Publication" << std::endl; */
+	std::cout << "Publication" << std::endl;
 
 	for(int i=3;i<6;i++){	//test
 		if(fabs(X(i))>M_PI){

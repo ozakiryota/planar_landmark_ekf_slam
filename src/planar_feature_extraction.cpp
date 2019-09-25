@@ -28,7 +28,7 @@ class PlanarFeatureExtraction{
 		pcl::PointCloud<pcl::PointXYZ>::Ptr d_gaussian_sphere {new pcl::PointCloud<pcl::PointXYZ>};
 		std::vector<pcl::PointCloud<pcl::PointNormal>::Ptr> clusters;
 		pcl::PointCloud<pcl::PointNormal>::Ptr vis_features {new pcl::PointCloud<pcl::PointNormal>};
-		planar_landmark_ekf_slam::PlanarFeatureArray features;
+		planar_landmark_ekf_slam::PlanarFeatureArray feature_array;
 		/*parameters*/
 		double cluster_tolerance;
 		int min_cluster_size;
@@ -67,7 +67,7 @@ void PlanarFeatureExtraction::CallbackNC(const sensor_msgs::PointCloud2ConstPtr 
 	pcl::fromROSMsg(*msg, *normals);
 	std::cout << "==========" << std::endl;
 	std::cout << "normals->points.size() = " << normals->points.size() << std::endl;
-	features.header = msg->header;
+	feature_array.header = msg->header;
 
 	ClearArray();
 	Clustering();
@@ -77,9 +77,10 @@ void PlanarFeatureExtraction::CallbackNC(const sensor_msgs::PointCloud2ConstPtr 
 
 void PlanarFeatureExtraction::ClearArray(void)
 {
-	features.features.clear();
+	feature_array.features.clear();
 	clusters.clear();
 	vis_features->points.clear();
+	d_gaussian_sphere->points.clear();
 }
 
 void PlanarFeatureExtraction::Clustering(void)
@@ -125,7 +126,7 @@ void PlanarFeatureExtraction::Clustering(void)
 		tmp_feature.max_local.y = Max[1];
 		tmp_feature.max_local.z = Max[2];
 		tmp_feature.cluster_size = cluster_indices[i].indices.size();
-		features.features.push_back(tmp_feature);
+		feature_array.features.push_back(tmp_feature);
 		/*input for visualization*/
 		pcl::PointNormal tmp_normal;
 		tmp_normal.x = 0;
@@ -229,7 +230,7 @@ void PlanarFeatureExtraction::Visualization(void)
 void PlanarFeatureExtraction::Publication(void)
 {
 	/*features*/
-	pub_features.publish(features);
+	pub_features.publish(feature_array);
 	/*d-gaussian sphere (visualization)*/
 	d_gaussian_sphere->header.stamp = normals->header.stamp;
 	d_gaussian_sphere->header.frame_id = normals->header.frame_id;
