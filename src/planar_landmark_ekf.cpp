@@ -461,6 +461,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	observation->points.clear();
 	/*input*/
 	list_obs = *msg;
+	/* std::cout << "list_obs.features.size() = " << list_obs.features.size() << std::endl; */
 	for(size_t i=0;i<msg->features.size();++i){
 		/*input*/
 		pcl::PointXYZ tmp_point;
@@ -552,13 +553,13 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 			list_lm.features.push_back(list_obs.features[i]);
 			/*stack*/
 			Eigen::Vector3d Obs(
-				list_obs.features[i].point_local.x,
-				list_obs.features[i].point_local.y,
-				list_obs.features[i].point_local.z
+				list_obs.features[i].point_global.x,
+				list_obs.features[i].point_global.y,
+				list_obs.features[i].point_global.z
 			);
-			VectorVStack(Xnew, PlaneLocalToGlobal(Obs));
+			VectorVStack(Xnew, Obs);
 		}
-		else{
+		else{	//associated observation
 			int lm_id = list_obs.features[i].corr_id;
 			/*update landmarks info*/
 			UpdateLMInfo(lm_id);
@@ -583,8 +584,8 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	X.conservativeResize(X.size() + Xnew.size());
 	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
 	Eigen::MatrixXd Ptmp = P;
-	const double initial_wall_sigma = 0.01;
-	P = initial_wall_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
+	const double initial_lm_sigma = 0.01;
+	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
 	/*arrange list*/
 	for(size_t i=0;i<list_lm.features.size();++i){
@@ -679,6 +680,31 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 	/*judge in normal direction*/
 	if(obs.normal_is_inward != lm.normal_is_inward)	return false;
 	/*judge in position*/
+	/* Eigen::Vector3d ObsMin( */
+	/* 	obs.min_global.x, */
+	/* 	obs.min_global.y, */
+	/* 	obs.min_global.z */
+	/* ); */
+	/* Eigen::Vector3d ObsMax( */
+	/* 	obs.max_global.x, */
+	/* 	obs.max_global.y, */
+	/* 	obs.max_global.z */
+	/* ); */
+	/* Eigen::Vector3d LmMin( */
+	/* 	lm.min_global.x, */
+	/* 	lm.min_global.y, */
+	/* 	lm.min_global.z */
+	/* ); */
+	/* Eigen::Vector3d LmMax( */
+	/* 	lm.max_global.x, */
+	/* 	lm.max_global.y, */
+	/* 	lm.max_global.z */
+	/* ); */
+	/* Eigen::Vector3d ObsCent = ObsMin + (ObsMax - ObsMin)/2.0; */
+	/* Eigen::Vector3d LmCent = LmMin + (LmMax - LmMin)/2.0; */
+	/* Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs(); */
+	/* Eigen::Vector3d SumWidth = (ObsMax - ObsMin).cwiseAbs()/2.0 + (LmMax - LmMin).cwiseAbs()/2.0; */
+
 	Eigen::Vector3d ObsMin(
 		obs.min_global.x,
 		obs.min_global.y,
@@ -699,10 +725,18 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 		lm.max_global.y,
 		lm.max_global.z
 	);
-	Eigen::Vector3d ObsCent = ObsMin + (ObsMax - ObsMin)/2.0;
-	Eigen::Vector3d LmCent = LmMin + (LmMax - LmMin)/2.0;
+	Eigen::Vector3d ObsCent(
+		obs.centroid.x,
+		obs.centroid.y,
+		obs.centroid.z
+	);
+	Eigen::Vector3d LmCent(
+		lm.centroid.x,
+		lm.centroid.y,
+		lm.centroid.z
+	);
+	Eigen::Vector3d SumWidth = (ObsMax - ObsMin)/2.0 + (LmMax - LmMin)/2.0;
 	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
-	Eigen::Vector3d SumWidth = (ObsMax - ObsMin).cwiseAbs()/2.0 + (LmMax - LmMin).cwiseAbs()/2.0;
 
 	for(size_t i=0;i<CentDist.size();++i){
 		if(CentDist(i) > SumWidth(i))	return false;
