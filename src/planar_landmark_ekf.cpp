@@ -122,12 +122,12 @@ class PlanarLandmarkEKF{
 		void CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg);
 
 		void CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg);
-		void SyncWithStateVectorBeforeAssoc(void);
+		void DataSyncBeforeAssoc(void);
 		bool Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
 		void MergeLM(int parent_id, int child_id);
 		void UpdateLMInfo(int lm_id);
 		bool Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
-		void SyncWithStateVectorAfterAssoc(void);
+		void DataSyncAfterAssoc(void);
 		void EraseLM(int index);
 
 		void SearchCorrespondObsID(std::vector<ObsInfo>& list_obs_info, int lm_id);
@@ -457,62 +457,14 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
 {
 	std::cout << "Callback Features" << std::endl;
-	/*clear*/
-	observation->points.clear();
 	/*input*/
 	list_obs = *msg;
-	/* std::cout << "list_obs.features.size() = " << list_obs.features.size() << std::endl; */
-	for(size_t i=0;i<msg->features.size();++i){
-		/*input*/
-		pcl::PointXYZ tmp_point;
-		tmp_point.x = msg->features[i].point_local.x;
-		tmp_point.y = msg->features[i].point_local.y;
-		tmp_point.z = msg->features[i].point_local.z;
-		observation->points.push_back(tmp_point);
-		/*transformation*/
-		Eigen::Vector3d MinLocal(
-			msg->features[i].min_local.x,
-			msg->features[i].min_local.y,
-			msg->features[i].min_local.z
-		);
-		Eigen::Vector3d MaxLocal(
-			msg->features[i].max_local.x,
-			msg->features[i].max_local.y,
-			msg->features[i].max_local.z
-		);
-		Eigen::Vector3d Nl(
-			msg->features[i].point_local.x,
-			msg->features[i].point_local.y,
-			msg->features[i].point_local.z
-		);
-		Eigen::Vector3d MinGlobal = PointLocalToGlobal(MinLocal);
-		Eigen::Vector3d MaxGlobal = PointLocalToGlobal(MaxLocal);
-		Eigen::Vector3d Ng = PlaneLocalToGlobal(Nl);
-		Eigen::Vector3d Cent = MinGlobal + (MaxGlobal - MinGlobal)/2.0;
-		/*input*/
-		list_obs.features[i].min_global.x = MinGlobal(0);
-		list_obs.features[i].min_global.y = MinGlobal(1);
-		list_obs.features[i].min_global.z = MinGlobal(2);
-		list_obs.features[i].max_global.x = MaxGlobal(0);
-		list_obs.features[i].max_global.y = MaxGlobal(1);
-		list_obs.features[i].max_global.z = MaxGlobal(2);
-		list_obs.features[i].centroid.x = Cent(0);
-		list_obs.features[i].centroid.y = Cent(1);
-		list_obs.features[i].centroid.z = Cent(2);
-		list_obs.features[i].point_global.x = Ng(0);
-		list_obs.features[i].point_global.y = Ng(1);
-		list_obs.features[i].point_global.z = Ng(2);
-		list_obs.features[i].normal_is_inward = CheckNormalIsInward(Ng);
-		list_obs.features[i].corr_id = -1;
-		list_obs.features[i].was_observed_in_this_scan = true;
-		list_obs.features[i].was_merged = false;
-	}
+	DataSyncBeforeAssoc();
 
 	/*data association*/
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
 	const double search_radius = 0.1;
-	SyncWithStateVectorBeforeAssoc();
 	for(size_t i=0;i<list_lm.features.size();++i){
 		/*kdtree search*/
 		std::vector<int> neighbor_obs_id;
@@ -587,91 +539,74 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	const double initial_lm_sigma = 0.01;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
-	/*arrange list*/
-	for(size_t i=0;i<list_lm.features.size();++i){
-		/*list lm observed simul*/
-		list_lm.features[i].list_lm_observed_simul.resize(list_lm.features.size(), false);	//keeps valuses and inputs "false" into new memories
-		if(list_lm.features[i].was_observed_in_this_scan){
-			for(size_t j=0;j<list_lm.features.size();++j){
-				if(list_lm.features[j].was_observed_in_this_scan)	list_lm.features[i].list_lm_observed_simul[j] = true;
-			}
-		}
-	}
+	/*Data Synchronization*/
+	DataSyncAfterAssoc();
 	/*erase*/
 	for(size_t i=0;i<list_lm.features.size();){
 		if(list_lm.features[i].was_merged)	EraseLM(i);
 		else	++i;
 	}
+	/*erased landmark*/
+	for(int i=0;i<list_erased_lm.features.size();++i)	PushBackMarkerPlanes(list_erased_lm.features[i]);
 
-	SyncWithStateVectorAfterAssoc();
 	Publication();
 }
 
-void PlanarLandmarkEKF::SyncWithStateVectorBeforeAssoc(void)
+void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 {
-	/* std::cout << "Synchronization Wirh State Vector Before Association" << std::endl; */
+	std::cout << "Synchronization Wirh State Vector Before Association" << std::endl;
 
-	/* int num_lm = (X.size() - size_robot_state)/size_lm_state; */
-	/* landmarks->points.clear(); */
-	/* for(int i=0;i<num_lm;++i){ */
-	for(int i=0;i<list_lm.features.size();++i){
-		/* #<{(|transform|)}># */
-		/* Eigen::Vector3d Ng = X.segment(size_robot_state + i*size_lm_state, size_lm_state); */
-		/* Eigen::Vector3d Nl = PlaneGlobalToLocal(Ng); */
-		/* #<{(|input|)}># */
-		/* pcl::PointXYZ tmp; */
-		/* tmp.x = Nl(0); */
-		/* tmp.y = Nl(1); */
-		/* tmp.z = Nl(2); */
-		/* landmarks->points.push_back(tmp); */
+	/*clear*/
+	observation->points.clear();
+	/*observation*/
+	for(size_t i=0;i<list_obs.features.size();++i){
 		/*input*/
-		/* list_lm.features[i].point_global.x = Ng(0); */
-		/* list_lm.features[i].point_global.y = Ng(1); */
-		/* list_lm.features[i].point_global.z = Ng(2); */
-		/* list_lm.features[i].point_local.x = Nl(0); */
-		/* list_lm.features[i].point_local.y = Nl(1); */
-		/* list_lm.features[i].point_local.z = Nl(2); */
-		/* list_lm.features[i].centroid.x = list_lm.features[i].min_global.x + (list_lm.features[i].max_global.x - list_lm.features[i].min_global.x)/2.0; */
-		/* list_lm.features[i].centroid.y = list_lm.features[i].min_global.y + (list_lm.features[i].max_global.y - list_lm.features[i].min_global.y)/2.0; */
-		/* list_lm.features[i].centroid.z = list_lm.features[i].min_global.z + (list_lm.features[i].max_global.z - list_lm.features[i].min_global.z)/2.0; */
-		/* list_lm.features[i].id = i; */
-		/* list_lm.features[i].corr_id = -1; */
+		pcl::PointXYZ tmp_point;
+		tmp_point.x = list_obs.features[i].point_local.x;
+		tmp_point.y = list_obs.features[i].point_local.y;
+		tmp_point.z = list_obs.features[i].point_local.z;
+		observation->points.push_back(tmp_point);
+		/*transformation*/
+		Eigen::Vector3d MinLocal(
+			list_obs.features[i].min_local.x,
+			list_obs.features[i].min_local.y,
+			list_obs.features[i].min_local.z
+		);
+		Eigen::Vector3d MaxLocal(
+			list_obs.features[i].max_local.x,
+			list_obs.features[i].max_local.y,
+			list_obs.features[i].max_local.z
+		);
+		Eigen::Vector3d Nl(
+			list_obs.features[i].point_local.x,
+			list_obs.features[i].point_local.y,
+			list_obs.features[i].point_local.z
+		);
+		Eigen::Vector3d MinGlobal = PointLocalToGlobal(MinLocal);
+		Eigen::Vector3d MaxGlobal = PointLocalToGlobal(MaxLocal);
+		Eigen::Vector3d Ng = PlaneLocalToGlobal(Nl);
+		Eigen::Vector3d Cent = MinGlobal + (MaxGlobal - MinGlobal)/2.0;
+		/*input*/
+		list_obs.features[i].min_global.x = MinGlobal(0);
+		list_obs.features[i].min_global.y = MinGlobal(1);
+		list_obs.features[i].min_global.z = MinGlobal(2);
+		list_obs.features[i].max_global.x = MaxGlobal(0);
+		list_obs.features[i].max_global.y = MaxGlobal(1);
+		list_obs.features[i].max_global.z = MaxGlobal(2);
+		list_obs.features[i].centroid.x = Cent(0);
+		list_obs.features[i].centroid.y = Cent(1);
+		list_obs.features[i].centroid.z = Cent(2);
+		list_obs.features[i].point_global.x = Ng(0);
+		list_obs.features[i].point_global.y = Ng(1);
+		list_obs.features[i].point_global.z = Ng(2);
+		list_obs.features[i].normal_is_inward = CheckNormalIsInward(Ng);
+		list_obs.features[i].corr_id = -1;
+		list_obs.features[i].was_observed_in_this_scan = true;
+		list_obs.features[i].was_merged = false;
+	}
+	/*landmarks*/
+	for(int i=0;i<list_lm.features.size();++i){
 		list_lm.features[i].was_observed_in_this_scan = false;
-
-		/* #<{(|visual origin position|)}># */
-		/* Eigen::Vector3d Cent( */
-		/* 	list_lm.features[i].centroid.x, */
-		/* 	list_lm.features[i].centroid.y, */
-		/* 	list_lm.features[i].centroid.z */
-		/* ); */
-		/* Eigen::Vector3d NgToCent = Cent - Ng; */
-		/* Eigen::Vector3d Origin = Ng + (NgToCent - NgToCent.dot(Ng)/Ng.norm()/Ng.norm()*Ng); */
-		/* #<{(|visual origin orientation|)}># */
-		/* std::vector<Eigen::Vector3d> tmp_axes(3); */
-		/* tmp_axes[0] = -Ng.normalized(); */
-		/* tmp_axes[1] = (Origin - Ng).normalized(); */
-		/* tmp_axes[2] = (tmp_axes[0].cross(tmp_axes[1])).normalized(); */
-		/* Eigen::Matrix3d Axes; */
-		/* for(size_t j=0;j<tmp_axes.size();++j)	Axes.block(0, j, 3, 1) = tmp_axes[j]; */
-		/* Eigen::Quaterniond q_orientation(Axes); */
-		/* q_orientation.normalize(); */
-		/* #<{(|input|)}># */
-		/* list_lm.features[i].origin.position.x = Origin(0); */
-		/* list_lm.features[i].origin.position.y = Origin(1); */
-		/* list_lm.features[i].origin.position.z = Origin(2); */
-		/* // list_lm.features[i].origin.position.x = list_lm.features[i].centroid.x; */
-		/* // list_lm.features[i].origin.position.y = list_lm.features[i].centroid.y; */
-		/* // list_lm.features[i].origin.position.z = list_lm.features[i].centroid.z; */
-		/* list_lm.features[i].origin.orientation = QuatEigenToMsg(q_orientation); */
-		/* #<{(|visual scale|)}># */
-		/* Eigen::Vector3d MinMax( */
-		/* 	list_lm.features[i].max_global.x - list_lm.features[i].min_global.x, */
-		/* 	list_lm.features[i].max_global.y - list_lm.features[i].min_global.y, */
-		/* 	list_lm.features[i].max_global.z - list_lm.features[i].min_global.z */
-		/* ); */
-		/* list_lm.features[i].scale.x = (MinMax.dot(tmp_axes[0])/tmp_axes[0].norm()/tmp_axes[0].norm()*tmp_axes[0]).norm(); */
-		/* list_lm.features[i].scale.y = (MinMax.dot(tmp_axes[1])/tmp_axes[1].norm()/tmp_axes[1].norm()*tmp_axes[1]).norm(); */
-		/* list_lm.features[i].scale.z = (MinMax.dot(tmp_axes[2])/tmp_axes[2].norm()/tmp_axes[2].norm()*tmp_axes[2]).norm(); */
 	}
 }
 
@@ -831,14 +766,15 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	S = jH*P*jH.transpose() + R;
 }
 
-void PlanarLandmarkEKF::SyncWithStateVectorAfterAssoc(void)
+void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 {
-	/* std::cout << "Synchronization Wirh State Vector After Association" << std::endl; */
+	std::cout << "Synchronization Wirh State Vector After Association" << std::endl;
 
-	int num_lm = (X.size() - size_robot_state)/size_lm_state;
+	/*clear*/
 	landmarks->points.clear();
 	planes.markers.clear();
-	for(int i=0;i<num_lm;++i){
+	/*landmarks*/
+	for(int i=0;i<list_lm.features.size();++i){
 		/*transform*/
 		Eigen::Vector3d Ng = X.segment(size_robot_state + i*size_lm_state, size_lm_state);
 		Eigen::Vector3d Nl = PlaneGlobalToLocal(Ng);
@@ -860,7 +796,14 @@ void PlanarLandmarkEKF::SyncWithStateVectorAfterAssoc(void)
 		list_lm.features[i].centroid.z = list_lm.features[i].min_global.z + (list_lm.features[i].max_global.z - list_lm.features[i].min_global.z)/2.0;
 		list_lm.features[i].id = i;
 		list_lm.features[i].corr_id = -1;
-		// list_lm.features[i].was_observed_in_this_scan = false;
+
+		/*list lm observed simul*/
+		list_lm.features[i].list_lm_observed_simul.resize(list_lm.features.size(), false);	//keeps valuses and inputs "false" into new memories
+		if(list_lm.features[i].was_observed_in_this_scan){
+			for(size_t j=0;j<list_lm.features.size();++j){
+				if(list_lm.features[j].was_observed_in_this_scan)	list_lm.features[i].list_lm_observed_simul[j] = true;
+			}
+		}
 
 		/*visual origin position*/
 		Eigen::Vector3d Cent(
@@ -903,6 +846,8 @@ void PlanarLandmarkEKF::SyncWithStateVectorAfterAssoc(void)
 
 void PlanarLandmarkEKF::EraseLM(int index)
 {
+	std::cout << "Erase landmark" << std::endl;
+
 	/*keep*/
 	list_erased_lm.features.push_back(list_lm.features[index]);
 	/*list*/
@@ -915,6 +860,7 @@ void PlanarLandmarkEKF::EraseLM(int index)
 	X.resize(X.size() - size_lm_state);
 	X.segment(0, delimit_point) = tmp_X.segment(0, delimit_point);
 	X.segment(delimit_point, X.size() - delimit_point) = tmp_X.segment(delimit_point_, tmp_X.size() - delimit_point_);
+	std::cout << "test 1" << std::endl;
 	/*P*/
 	Eigen::MatrixXd tmp_P = P;
 	P.resize(P.cols() - size_lm_state, P.rows() - size_lm_state);
@@ -926,8 +872,10 @@ void PlanarLandmarkEKF::EraseLM(int index)
 	P.block(delimit_point, 0, P.rows()-delimit_point, delimit_point) = tmp_P.block(delimit_point_, 0, tmp_P.rows()-delimit_point_, delimit_point);
 	/*P-lower-right*/
 	P.block(delimit_point, delimit_point, P.rows()-delimit_point, P.cols()-delimit_point) = tmp_P.block(delimit_point_, delimit_point_, tmp_P.rows()-delimit_point_, tmp_P.cols()-delimit_point_);
+	std::cout << "test 2" << std::endl;
 	/*list LM observed at the same time*/
 	for(size_t i=0;i<list_lm.features.size();++i)	list_lm.features[i].list_lm_observed_simul.erase(list_lm.features[i].list_lm_observed_simul.begin() + index);
+	std::cout << "test 3" << std::endl;
 }
 
 void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg)
@@ -1534,7 +1482,7 @@ Eigen::Vector3d PlanarLandmarkEKF::PointWallFrameToGlobal(const Eigen::Vector3d&
 
 void PlanarLandmarkEKF::Publication(void)
 {
-	/* std::cout << "Publication" << std::endl; */
+	std::cout << "Publication" << std::endl;
 
 	for(int i=3;i<6;i++){	//test
 		if(fabs(X(i))>M_PI){
@@ -1623,6 +1571,12 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 	if(lm.was_observed_in_this_scan){
 		tmp.color.r = 1.0;
 		tmp.color.g = 0.0;
+		tmp.color.b = 0.0;
+		tmp.color.a = 0.9;
+	}
+	else if(lm.was_merged){
+		tmp.color.r = 1.0;
+		tmp.color.g = 1.0;
 		tmp.color.b = 0.0;
 		tmp.color.a = 0.9;
 	}
