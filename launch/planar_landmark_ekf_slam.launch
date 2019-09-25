@@ -28,6 +28,7 @@
 	</node>
 	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction">
 		<param name="cluster_tolerance" type="double" value="0.1"/>
+		<!-- <param name="min_cluster_size" type="int" value="150"/> -->
 		<param name="min_cluster_size" type="int" value="1000"/>
 	</node>
 	<node pkg="planar_landmark_ekf_slam" name="planar_landmark_ekf" type="planar_landmark_ekf" output="screen">
