@@ -21,9 +21,11 @@ class PlanarFeatureExtraction{
 		ros::Subscriber sub_nc;
 		/*publish*/
 		ros::Publisher pub_features;
+		ros::Publisher pub_pc;
 		/*objects*/
 		pcl::visualization::PCLVisualizer viewer {"Planar Feature Extraction"};
 		pcl::PointCloud<pcl::PointNormal>::Ptr normals {new pcl::PointCloud<pcl::PointNormal>};
+		pcl::PointCloud<pcl::PointXYZ>::Ptr d_gaussian_sphere {new pcl::PointCloud<pcl::PointXYZ>};
 		std::vector<pcl::PointCloud<pcl::PointNormal>::Ptr> clusters;
 		pcl::PointCloud<pcl::PointNormal>::Ptr vis_features {new pcl::PointCloud<pcl::PointNormal>};
 		planar_landmark_ekf_slam::PlanarFeatureArray features;
@@ -46,6 +48,7 @@ PlanarFeatureExtraction::PlanarFeatureExtraction()
 {
 	sub_nc = nh.subscribe("/normals", 1, &PlanarFeatureExtraction::CallbackNC, this);
 	pub_features = nh.advertise<planar_landmark_ekf_slam::PlanarFeatureArray>("/features", 1);
+	pub_pc = nh.advertise<sensor_msgs::PointCloud2>("/observation", 1);
 	
 	viewer.setBackgroundColor(1, 1, 1);
 	viewer.addCoordinateSystem(1.0, "axis");
@@ -132,6 +135,12 @@ void PlanarFeatureExtraction::Clustering(void)
 		tmp_normal.data_n[1] = -fabs(AveNormal(3))*AveNormal(1);
 		tmp_normal.data_n[2] = -fabs(AveNormal(3))*AveNormal(2);
 		vis_features->points.push_back(tmp_normal);
+		/*input for visualization*/
+		pcl::PointXYZ tmp_point;
+		tmp_point.x = -fabs(AveNormal(3))*AveNormal(0);
+		tmp_point.y = -fabs(AveNormal(3))*AveNormal(1);
+		tmp_point.z = -fabs(AveNormal(3))*AveNormal(2);
+		d_gaussian_sphere->points.push_back(tmp_point);
 		/*extraction for visualization*/
 		pcl::PointCloud<pcl::PointNormal>::Ptr tmp_cluster (new pcl::PointCloud<pcl::PointNormal>);
 		pcl::PointIndices::Ptr tmp_clustered_indices (new pcl::PointIndices);
@@ -219,7 +228,14 @@ void PlanarFeatureExtraction::Visualization(void)
 
 void PlanarFeatureExtraction::Publication(void)
 {
+	/*features*/
 	pub_features.publish(features);
+	/*d-gaussian sphere (visualization)*/
+	d_gaussian_sphere->header.stamp = normals->header.stamp;
+	d_gaussian_sphere->header.frame_id = normals->header.frame_id;
+	sensor_msgs::PointCloud2 observation;
+	pcl::toROSMsg(*d_gaussian_sphere, observation);
+	pub_pc.publish(observation);
 }
 
 int main(int argc, char** argv)
