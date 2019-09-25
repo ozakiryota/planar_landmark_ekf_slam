@@ -87,10 +87,12 @@ class PlanarLandmarkEKF{
 		Eigen::MatrixXd P;
 		sensor_msgs::Imu bias;
 		pcl::PointCloud<pcl::PointXYZ>::Ptr observation {new pcl::PointCloud<pcl::PointXYZ>};
-		pcl::PointCloud<pcl::PointXYZ>::Ptr landmarks {new pcl::PointCloud<pcl::PointXYZ>};
+		pcl::PointCloud<pcl::PointXYZ>::Ptr landmarks_local {new pcl::PointCloud<pcl::PointXYZ>};
+		pcl::PointCloud<pcl::PointXYZ>::Ptr landmarks_global {new pcl::PointCloud<pcl::PointXYZ>};
 		planar_landmark_ekf_slam::PlanarFeatureArray list_obs;
 		planar_landmark_ekf_slam::PlanarFeatureArray list_lm;
 		planar_landmark_ekf_slam::PlanarFeatureArray list_erased_lm;
+		geometry_msgs::PoseArray landmark_origins;
 		pcl::PointCloud<pcl::InterestPoint>::Ptr d_gaussian_sphere_ {new pcl::PointCloud<pcl::InterestPoint>};
 		std::vector<LMInfo> list_lm_info;
 		std::vector<LMInfo> list_erased_lm_info;
@@ -103,6 +105,7 @@ class PlanarLandmarkEKF{
 		/*counter*/
 		int counter_imu = 0;
 		/*time*/
+		ros::Time time_publish;
 		ros::Time time_imu_now;
 		ros::Time time_imu_last;
 		ros::Time time_odom_now;
@@ -230,6 +233,7 @@ void PlanarLandmarkEKF::CallbackIMU(const sensor_msgs::ImuConstPtr& msg)
 {
 	/* std::cout << "Callback IMU" << std::endl; */
 
+	time_publish = msg->header.stamp;
 	time_imu_now = msg->header.stamp;
 	double dt;
 	try{
@@ -381,6 +385,7 @@ void PlanarLandmarkEKF::CallbackOdom(const nav_msgs::OdometryConstPtr& msg)
 {
 	/* std::cout << "Callback Odom" << std::endl; */
 
+	time_publish = msg->header.stamp;
 	time_odom_now = msg->header.stamp;
 	double dt;
 	try{
@@ -470,6 +475,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	/* std::cout << "Callback Features" << std::endl; */
 
 	/*input*/
+	time_publish = msg->header.stamp;
 	list_obs = *msg;
 	DataSyncBeforeAssoc();
 
@@ -481,7 +487,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 		/*kdtree search*/
 		std::vector<int> neighbor_obs_id;
 		std::vector<float> neighbor_obs_sqrdist;
-		kdtree.radiusSearch(landmarks->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
+		kdtree.radiusSearch(landmarks_local->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			std::cout << "i=" << i << ", j=" << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
 		}
@@ -558,8 +564,6 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 		if(list_lm.features[i].was_merged)	EraseLM(i);
 		else	++i;
 	}
-	/*erased landmark*/
-	for(int i=0;i<list_erased_lm.features.size();++i)	PushBackMarkerPlanes(list_erased_lm.features[i]);
 
 	Publication();
 }
@@ -783,19 +787,25 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 	/* std::cout << "Synchronization Wirh State Vector After Association" << std::endl; */
 
 	/*clear*/
-	landmarks->points.clear();
+	landmarks_local->points.clear();
+	landmarks_global->points.clear();
+	landmark_origins.poses.clear();
 	planes.markers.clear();
 	/*landmarks*/
 	for(int i=0;i<list_lm.features.size();++i){
 		/*transform*/
 		Eigen::Vector3d Ng = X.segment(size_robot_state + i*size_lm_state, size_lm_state);
 		Eigen::Vector3d Nl = PlaneGlobalToLocal(Ng);
-		/*input*/
+		/*pc input*/
 		pcl::PointXYZ tmp;
 		tmp.x = Nl(0);
 		tmp.y = Nl(1);
 		tmp.z = Nl(2);
-		landmarks->points.push_back(tmp);
+		landmarks_local->points.push_back(tmp);
+		tmp.x = Ng(0);
+		tmp.y = Ng(1);
+		tmp.z = Ng(2);
+		landmarks_global->points.push_back(tmp);
 		/*input*/
 		list_lm.features[i].point_global.x = Ng(0);
 		list_lm.features[i].point_global.y = Ng(1);
@@ -842,6 +852,7 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 		// list_lm.features[i].origin.position.y = list_lm.features[i].centroid.y;
 		// list_lm.features[i].origin.position.z = list_lm.features[i].centroid.z;
 		list_lm.features[i].origin.orientation = QuatEigenToMsg(q_orientation);
+		landmark_origins.poses.push_back(list_lm.features[i].origin);
 		/*visual scale*/
 		Eigen::Vector3d MinMax(
 			list_lm.features[i].max_global.x - list_lm.features[i].min_global.x,
@@ -854,6 +865,8 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 		/*input*/
 		PushBackMarkerPlanes(list_lm.features[i]);
 	}
+	/*erased landmark*/
+	for(int i=0;i<list_erased_lm.features.size();++i)	PushBackMarkerPlanes(list_erased_lm.features[i]);
 }
 
 void PlanarLandmarkEKF::EraseLM(int index)
@@ -1511,13 +1524,12 @@ void PlanarLandmarkEKF::Publication(void)
 	/*pose*/
 	geometry_msgs::PoseStamped pose_pub = StateVectorToPoseStamped();
 	pose_pub.header.frame_id = "/odom";
-	// pose_pub.header.stamp = ros::Time::now();
-	pose_pub.header.stamp = time_imu_now;
+	pose_pub.header.stamp = time_publish;
 	pub_pose.publish(pose_pub);
 
 	/*tf broadcast*/
     geometry_msgs::TransformStamped transform;
-	transform.header.stamp = pose_pub.header.stamp;
+	transform.header.stamp = time_publish;
 	transform.header.frame_id = "/odom";
 	transform.child_frame_id = "/velodyne";
 	transform.transform.translation.x = pose_pub.pose.position.x;
@@ -1528,34 +1540,21 @@ void PlanarLandmarkEKF::Publication(void)
 
 	/*pc*/
 	sensor_msgs::PointCloud2 pc_pub;
-	pcl::PointCloud<pcl::PointXYZ>::Ptr landmarks_global (new pcl::PointCloud<pcl::PointXYZ>);
-	for(int i=0;i<list_lm.features.size();++i){
-		pcl::PointXYZ tmp;
-		tmp.x = X(size_robot_state + i*size_lm_state);
-		tmp.y = X(size_robot_state + i*size_lm_state + 1);
-		tmp.z = X(size_robot_state + i*size_lm_state + 2);
-		landmarks_global->points.push_back(tmp);
-	}
 	pcl::toROSMsg(*landmarks_global, pc_pub);
 	pc_pub.header.frame_id = "/odom";
-	pc_pub.header.stamp = time_imu_now;
+	pc_pub.header.stamp = time_publish;
 	pub_dgaussiansphere_est.publish(pc_pub);
 
 	/*visualization marker*/
-	matching_lines.header.stamp = time_imu_now;
+	matching_lines.header.stamp = time_publish;
 	// pub_marker.publish(matching_lines);
 
 	/*landmark origins*/
-	geometry_msgs::PoseArray landmark_origins;
 	landmark_origins.header.frame_id = "/odom";
-	landmark_origins.header.stamp = time_imu_now;
-	/* for(size_t i=0;i<list_lm_info.size();i++)	if(list_lm_info[i].available)	landmark_origins.poses.push_back(list_lm_info[i].origin); */
-	for(size_t i=0;i<list_lm.features.size();++i)	landmark_origins.poses.push_back(list_lm.features[i].origin);
+	landmark_origins.header.stamp = time_publish;
 	pub_posearray.publish(landmark_origins);
 
 	/*planes*/
-	/* planes.markers.clear(); */
-	/* for(size_t i=0;i<list_lm.features.size();++i)	PushBackMarkerPlanes(list_lm.features[i]); */
 	pub_markerarray.publish(planes);
 
 	/*variance*/
