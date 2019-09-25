@@ -72,7 +72,7 @@ void PlanarFeatureExtraction::CallbackNC(const sensor_msgs::PointCloud2ConstPtr 
 	ClearArray();
 	Clustering();
 	Visualization();
-	Publication();
+	if(!feature_array.features.empty())	Publication();
 }
 
 void PlanarFeatureExtraction::ClearArray(void)
