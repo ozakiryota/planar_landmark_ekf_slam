@@ -219,6 +219,16 @@ Visualization Manager:
         planes: true
       Queue Size: 100
       Value: true
+    - Angle Tolerance: 1
+      Class: rviz/Odometry
+      Color: 255; 0; 255
+      Enabled: true
+      Keep: 10000
+      Length: 0.5
+      Name: Odometry
+      Position Tolerance: 0.5
+      Topic: /ekf/odom
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
@@ -243,7 +253,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 17.1195183
+      Distance: 21.4166298
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1

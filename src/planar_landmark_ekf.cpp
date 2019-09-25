@@ -500,8 +500,16 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 	Eigen::Vector3d SumWidth = (ObsMax - ObsMin)/2.0 + (LmMax - LmMin)/2.0;
 	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
 
+	const double threshold_corr_position_diff = 0.5;
 	for(size_t i=0;i<CentDist.size();++i){
-		if(CentDist(i) > SumWidth(i))	return false;
+		/* if(CentDist(i) > SumWidth(i))	return false; */
+		if(CentDist(i) > SumWidth(i) + threshold_corr_position_diff){
+			std::cout << "ObsMin = (" << ObsMin(0) << ", " << ObsMin(1) << ", " << ObsMin(2) << ")" << std::endl;
+			std::cout << "ObsMax = (" << ObsMax(0) << ", " << ObsMax(1) << ", " << ObsMax(2) << ")" << std::endl;
+			std::cout << "LmMin = (" << LmMin(0) << ", " << LmMin(1) << ", " << LmMin(2) << ")" << std::endl;
+			std::cout << "LmMax = (" << LmMax(0) << ", " << LmMax(1) << ", " << LmMax(2) << ")" << std::endl;
+			return false;
+		}
 	}
 	/*pass*/
 	return true;
