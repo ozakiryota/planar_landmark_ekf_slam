@@ -522,12 +522,12 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 
 	list_lm.features[child_id].was_merged = true;
 	/*min-max*/
-	if(list_lm.features[parent_id].min_global.x < list_lm.features[child_id].min_global.x)	list_lm.features[parent_id].min_global.x = list_lm.features[child_id].min_global.x;
-	if(list_lm.features[parent_id].min_global.y < list_lm.features[child_id].min_global.y)	list_lm.features[parent_id].min_global.y = list_lm.features[child_id].min_global.y;
-	if(list_lm.features[parent_id].min_global.z < list_lm.features[child_id].min_global.z)	list_lm.features[parent_id].min_global.z = list_lm.features[child_id].min_global.z;
-	if(list_lm.features[parent_id].max_global.x > list_lm.features[child_id].max_global.x)	list_lm.features[parent_id].max_global.x = list_lm.features[child_id].max_global.x;
-	if(list_lm.features[parent_id].max_global.y > list_lm.features[child_id].max_global.y)	list_lm.features[parent_id].max_global.y = list_lm.features[child_id].max_global.y;
-	if(list_lm.features[parent_id].max_global.z > list_lm.features[child_id].max_global.z)	list_lm.features[parent_id].max_global.z = list_lm.features[child_id].max_global.z;
+	if(list_lm.features[parent_id].min_global.x > list_lm.features[child_id].min_global.x)	list_lm.features[parent_id].min_global.x = list_lm.features[child_id].min_global.x;
+	if(list_lm.features[parent_id].min_global.y > list_lm.features[child_id].min_global.y)	list_lm.features[parent_id].min_global.y = list_lm.features[child_id].min_global.y;
+	if(list_lm.features[parent_id].min_global.z > list_lm.features[child_id].min_global.z)	list_lm.features[parent_id].min_global.z = list_lm.features[child_id].min_global.z;
+	if(list_lm.features[parent_id].max_global.x < list_lm.features[child_id].max_global.x)	list_lm.features[parent_id].max_global.x = list_lm.features[child_id].max_global.x;
+	if(list_lm.features[parent_id].max_global.y < list_lm.features[child_id].max_global.y)	list_lm.features[parent_id].max_global.y = list_lm.features[child_id].max_global.y;
+	if(list_lm.features[parent_id].max_global.z < list_lm.features[child_id].max_global.z)	list_lm.features[parent_id].max_global.z = list_lm.features[child_id].max_global.z;
 	/*list lm observed simul*/
 	for(size_t i=0;i<list_lm.features[child_id].list_lm_observed_simul.size();++i){
 		if(list_lm.features[child_id].list_lm_observed_simul[i]) list_lm.features[parent_id].list_lm_observed_simul[i] = list_lm.features[child_id].list_lm_observed_simul[i];
@@ -592,12 +592,12 @@ void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
 	list_lm.features[lm_id].was_observed_in_this_scan = true;
 	int obs_id = list_lm.features[lm_id].corr_id;
 	/*min-max*/
-	if(list_lm.features[lm_id].min_global.x < list_obs.features[obs_id].min_global.x)	list_lm.features[lm_id].min_global.x = list_obs.features[obs_id].min_global.x;
-	if(list_lm.features[lm_id].min_global.y < list_obs.features[obs_id].min_global.y)	list_lm.features[lm_id].min_global.y = list_obs.features[obs_id].min_global.y;
-	if(list_lm.features[lm_id].min_global.z < list_obs.features[obs_id].min_global.z)	list_lm.features[lm_id].min_global.z = list_obs.features[obs_id].min_global.z;
-	if(list_lm.features[lm_id].max_global.x > list_obs.features[obs_id].max_global.x)	list_lm.features[lm_id].max_global.x = list_obs.features[obs_id].max_global.x;
-	if(list_lm.features[lm_id].max_global.y > list_obs.features[obs_id].max_global.y)	list_lm.features[lm_id].max_global.y = list_obs.features[obs_id].max_global.y;
-	if(list_lm.features[lm_id].max_global.z > list_obs.features[obs_id].max_global.z)	list_lm.features[lm_id].max_global.z = list_obs.features[obs_id].max_global.z;
+	if(list_lm.features[lm_id].min_global.x > list_obs.features[obs_id].min_global.x)	list_lm.features[lm_id].min_global.x = list_obs.features[obs_id].min_global.x;
+	if(list_lm.features[lm_id].min_global.y > list_obs.features[obs_id].min_global.y)	list_lm.features[lm_id].min_global.y = list_obs.features[obs_id].min_global.y;
+	if(list_lm.features[lm_id].min_global.z > list_obs.features[obs_id].min_global.z)	list_lm.features[lm_id].min_global.z = list_obs.features[obs_id].min_global.z;
+	if(list_lm.features[lm_id].max_global.x < list_obs.features[obs_id].max_global.x)	list_lm.features[lm_id].max_global.x = list_obs.features[obs_id].max_global.x;
+	if(list_lm.features[lm_id].max_global.y < list_obs.features[obs_id].max_global.y)	list_lm.features[lm_id].max_global.y = list_obs.features[obs_id].max_global.y;
+	if(list_lm.features[lm_id].max_global.z < list_obs.features[obs_id].max_global.z)	list_lm.features[lm_id].max_global.z = list_obs.features[obs_id].max_global.z;
 }
 
 bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S)
@@ -934,6 +934,14 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 	/* 	tmp.color.b = 1.0; */
 	/* 	tmp.color.a = 0.9; */
 	/* } */
+	/*test*/
+	/* tmp.pose.orientation.x = 0; */
+	/* tmp.pose.orientation.y = 0; */
+	/* tmp.pose.orientation.z = 0; */
+	/* tmp.pose.orientation.w = 1; */
+	/* tmp.scale.x = lm.max_global.x - lm.min_global.x; */
+	/* tmp.scale.y = lm.max_global.y - lm.min_global.y; */
+	/* tmp.scale.z = lm.max_global.z - lm.min_global.z; */
 
 	planes.markers.push_back(tmp);
 }
