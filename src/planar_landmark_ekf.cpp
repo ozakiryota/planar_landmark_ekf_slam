@@ -589,7 +589,10 @@ void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
 
 bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S)
 {
+	std::cout << "Innovation" << std::endl;
+
 	/*state*/
+	std::cout << "state" << std::endl;
 	Eigen::Vector3d Ng(
 		lm.point_global.x,
 		lm.point_global.y,
@@ -598,21 +601,26 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	double d2 = Ng.dot(Ng);
 	Eigen::Vector3d RPY = X.segment(3, 3);
 	/*Z*/
+	std::cout << "Z" << std::endl;
 	Z = {
 		obs.point_local.x,
 		obs.point_local.y,
 		obs.point_local.z
 	};
 	/*H*/
+	std::cout << "H" << std::endl;
 	H = PlaneGlobalToLocal(Ng);
 	/*jH*/
+	std::cout << "jH" << std::endl;
 	jH = Eigen::MatrixXd::Zero(Z.size(), X.size());
 	/*dH/d(XYZ)*/
+	std::cout << "dH/d(XYZ)" << std::endl;
 	Eigen::Vector3d rotN = GetRotationXYZMatrix(RPY, true)*Ng;
 	for(int j=0;j<Z.size();j++){
 		for(int k=0;k<3;k++)	jH(j, k) = -Ng(k)/d2*rotN(j);
 	}
 	/*dH/d(RPY)*/
+	std::cout << "dH/d(RPY)" << std::endl;
 	Eigen::Vector3d delN = Ng - Ng.dot(X.segment(0, 3))/d2*Ng;
 	jH(0, 3) = 0;
 	jH(0, 4) = (-sin(RPY(1))*cos(RPY(2)))*delN(0) + (-sin(RPY(1))*sin(RPY(2)))*delN(1) + (-cos(RPY(1)))*delN(2);
@@ -623,7 +631,8 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	jH(2, 3) = (-sin(RPY(0))*sin(RPY(1))*cos(RPY(2)) + cos(RPY(0))*sin(RPY(2)))*delN(0) + (-sin(RPY(0))*sin(RPY(1))*sin(RPY(2)) - cos(RPY(0))*cos(RPY(2)))*delN(1) + (-sin(RPY(0))*cos(RPY(1)))*delN(2);
 	jH(2, 4) = (cos(RPY(0))*cos(RPY(1))*cos(RPY(2)))*delN(0) + (cos(RPY(0))*cos(RPY(1))*sin(RPY(2)))*delN(1) + (-cos(RPY(0))*sin(RPY(1)))*delN(2);
 	jH(2, 5) = (-cos(RPY(0))*sin(RPY(1))*sin(RPY(2)) + sin(RPY(0))*cos(RPY(2)))*delN(0) + (cos(RPY(0))*sin(RPY(1))*cos(RPY(2)) + sin(RPY(0))*sin(RPY(2)))*delN(1);
-	/*dH/d(Wall)*/
+	/*dH/d(LM)*/
+	std::cout << "dH/d(LM)" << std::endl;
 	Eigen::Matrix3d Tmp;
 	for(int j=0;j<Z.size();j++){
 		for(int k=0;k<size_lm_state;k++){
@@ -633,11 +642,14 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	}
 	jH.block(0, size_robot_state + lm.id*size_lm_state, Z.size(), size_lm_state) = GetRotationXYZMatrix(RPY, true)*Tmp;
 	/*R*/
+	std::cout << "R" << std::endl;
 	const double sigma = 1.0e-2;
 	Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
 	/*Y, S*/
 	Y = Z - H;
 	S = jH*P*jH.transpose() + R;
+
+	std::cout << "Innovation end" << std::endl;
 }
 
 void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
@@ -754,8 +766,11 @@ void PlanarLandmarkEKF::EraseLM(int index)
 	P.block(delimit_point, 0, P.rows()-delimit_point, delimit_point) = tmp_P.block(delimit_point_, 0, tmp_P.rows()-delimit_point_, delimit_point);
 	/*P-lower-right*/
 	P.block(delimit_point, delimit_point, P.rows()-delimit_point, P.cols()-delimit_point) = tmp_P.block(delimit_point_, delimit_point_, tmp_P.rows()-delimit_point_, tmp_P.cols()-delimit_point_);
-	/*list LM observed at the same time*/
-	for(size_t i=0;i<list_lm.features.size();++i)	list_lm.features[i].list_lm_observed_simul.erase(list_lm.features[i].list_lm_observed_simul.begin() + index);
+	/*id*/
+	for(size_t i=0;i<list_lm.features.size();++i){
+		list_lm.features[i].id = i; 
+		list_lm.features[i].list_lm_observed_simul.erase(list_lm.features[i].list_lm_observed_simul.begin() + index);
+	}
 }
 
 bool PlanarLandmarkEKF::CheckNormalIsInward(const Eigen::Vector3d& Ng)
