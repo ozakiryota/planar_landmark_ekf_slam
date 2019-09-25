@@ -413,8 +413,9 @@ void PlanarLandmarkEKF::DataAssociation(void)
 		std::vector<float> neighbor_obs_sqrdist;
 		kdtree.radiusSearch(landmarks_local->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
-			std::cout << "i=" << i << ", j=" << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
+			std::cout << "lm_id = " << i << ", obs_id = " << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
 		}
+		if(neighbor_obs_id.size() == 0)	std::cout << "lm_id = " << i << ": No neighbor" << std::endl;
 		/*search correspond*/
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			int obs_id = neighbor_obs_id[j];
@@ -500,7 +501,7 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 	Eigen::Vector3d SumWidth = (ObsMax - ObsMin)/2.0 + (LmMax - LmMin)/2.0;
 	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
 
-	const double threshold_corr_position_diff = 0.5;
+	const double threshold_corr_position_diff = 0.2;
 	for(size_t i=0;i<CentDist.size();++i){
 		/* if(CentDist(i) > SumWidth(i))	return false; */
 		if(CentDist(i) > SumWidth(i) + threshold_corr_position_diff){
@@ -924,6 +925,15 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.b = 1.0;
 		tmp.color.a = 0.9;
 	}
+
+	/*test*/
+	/* const int highlighted_lm = 2; */
+	/* if(lm.id == highlighted_lm){ */
+	/* 	tmp.color.r = 1.0; */
+	/* 	tmp.color.g = 1.0; */
+	/* 	tmp.color.b = 1.0; */
+	/* 	tmp.color.a = 0.9; */
+	/* } */
 
 	planes.markers.push_back(tmp);
 }
