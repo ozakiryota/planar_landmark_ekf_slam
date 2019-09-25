@@ -331,7 +331,6 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	UpdateFeatures();
 	/*Data Synchronization*/
 	DataSyncAfterAssoc();
-	std::cout << "erase" << std::endl;
 	/*erase*/
 	for(size_t i=0;i<list_lm.features.size();){
 		if(list_lm.features[i].was_merged)	EraseLM(i);
@@ -562,7 +561,6 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 		}
 	}
-	std::cout << "update" << std::endl;
 	/*update*/
 	if(Zstacked.size()>0 && inipose_is_available)   UpdateComputation(Zstacked, Hstacked, jHstacked, Diag_sigma);
 	/*new registration*/
@@ -731,7 +729,7 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 
 void PlanarLandmarkEKF::EraseLM(int index)
 {
-	/* std::cout << "Erase landmark" << std::endl; */
+	std::cout << "Erase landmark" << std::endl;
 
 	/*keep*/
 	list_erased_lm.features.push_back(list_lm.features[index]);
@@ -775,6 +773,8 @@ bool PlanarLandmarkEKF::CheckNormalIsInward(const Eigen::Vector3d& Ng)
 
 void PlanarLandmarkEKF::UpdateComputation(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma)
 {
+	std::cout << "Update computation" << std::endl;
+
 	Eigen::VectorXd Y = Z - H;
 	// const double sigma = 1.2e-1;	//using floor
 	// Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
