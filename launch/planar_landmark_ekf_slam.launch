@@ -30,7 +30,9 @@
 		<param name="cluster_tolerance" type="double" value="0.1"/>
 		<param name="min_cluster_size" type="int" value="150"/>
 	</node>
-	<node pkg="planar_landmark_ekf_slam" name="planar_landmark_ekf" type="planar_landmark_ekf" output="screen"/>
+	<node pkg="planar_landmark_ekf_slam" name="planar_landmark_ekf" type="planar_landmark_ekf" output="screen">
+		<param name="threshold_corr_dist" type="double" value="0.1"/>
+	</node>
 
 	<!-- comparisons -->
 	<node pkg="gyrodometry" name="gyrodometry3d" type="gyrodometry3d" output="screen">

@@ -22,6 +22,7 @@ class PlanarLandmarkEKF{
 	private:
 		/*node handle*/
 		ros::NodeHandle nh;
+		ros::NodeHandle nhPrivate;
 		/*subscribe*/
 		ros::Subscriber sub_inipose;
 		ros::Subscriber sub_bias;
@@ -109,6 +110,8 @@ class PlanarLandmarkEKF{
 		/*visualization*/
 		visualization_msgs::Marker matching_lines;
 		visualization_msgs::MarkerArray planes;
+		/*parameters*/
+		double threshold_corr_dist;
 	public:
 		PlanarLandmarkEKF();
 		void SetUpVisualizationMarkerLineList(visualization_msgs::Marker& marker);	//visualization
@@ -158,23 +161,31 @@ class PlanarLandmarkEKF{
 };
 
 PlanarLandmarkEKF::PlanarLandmarkEKF()
+	:nhPrivate("~")
 {
+	/*subscribe*/
 	sub_inipose = nh.subscribe("/initial_orientation", 1, &PlanarLandmarkEKF::CallbackInipose, this);
 	sub_bias = nh.subscribe("/imu/bias", 1, &PlanarLandmarkEKF::CallbackBias, this);
 	sub_imu = nh.subscribe("/imu/data", 1, &PlanarLandmarkEKF::CallbackIMU, this);
 	sub_odom = nh.subscribe("/tinypower/odom", 1, &PlanarLandmarkEKF::CallbackOdom, this);
 	sub_dgaussiansphere_obs = nh.subscribe("/d_gaussian_sphere_obs", 1, &PlanarLandmarkEKF::CallbackDGaussianSphere, this);
 	sub_features = nh.subscribe("/features", 1, &PlanarLandmarkEKF::CallbackFeatures, this);
+	/*publish*/
 	pub_pose = nh.advertise<geometry_msgs::PoseStamped>("/wall_ekf_slam/pose", 1);
 	pub_posearray = nh.advertise<geometry_msgs::PoseArray>("/landmark_origins", 1);
 	pub_dgaussiansphere_est = nh.advertise<sensor_msgs::PointCloud2>("/d_gaussian_sphere_est", 1);
 	pub_marker = nh.advertise<visualization_msgs::Marker>("matching_lines", 1);
 	pub_markerarray = nh.advertise<visualization_msgs::MarkerArray>("planes", 1);
 	pub_variance = nh.advertise<std_msgs::Float64MultiArray>("variance", 1);
+	/*state*/
 	X = Eigen::VectorXd::Zero(size_robot_state);
 	const double initial_sigma = 0.1;
 	P = initial_sigma*Eigen::MatrixXd::Identity(size_robot_state, size_robot_state);
+	/*visualization*/
 	SetUpVisualizationMarkerLineList(matching_lines);
+	/*parameters*/
+	nhPrivate.param("threshold_corr_dist", threshold_corr_dist, 0.1);
+	std::cout << "threshold_corr_dist = " << threshold_corr_dist << std::endl;
 }
 
 void PlanarLandmarkEKF::SetUpVisualizationMarkerLineList(visualization_msgs::Marker& marker)
@@ -456,7 +467,8 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 
 void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
 {
-	std::cout << "Callback Features" << std::endl;
+	/* std::cout << "Callback Features" << std::endl; */
+
 	/*input*/
 	list_obs = *msg;
 	DataSyncBeforeAssoc();
@@ -464,12 +476,12 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	/*data association*/
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
-	const double search_radius = 0.1;
+	/* const double search_radius = 0.1; */
 	for(size_t i=0;i<list_lm.features.size();++i){
 		/*kdtree search*/
 		std::vector<int> neighbor_obs_id;
 		std::vector<float> neighbor_obs_sqrdist;
-		kdtree.radiusSearch(landmarks->points[i], search_radius, neighbor_obs_id, neighbor_obs_sqrdist);
+		kdtree.radiusSearch(landmarks->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			std::cout << "i=" << i << ", j=" << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
 		}
@@ -478,7 +490,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 			int obs_id = neighbor_obs_id[j];
 			if(Judge(list_lm.features[i], list_obs.features[obs_id])){
 				list_lm.features[i].corr_id = obs_id;
-				list_lm.features[i].corr_dist = neighbor_obs_sqrdist[j];
+				list_lm.features[i].corr_dist = sqrt(neighbor_obs_sqrdist[j]);
 				if(list_obs.features[obs_id].corr_id == -1)	list_obs.features[obs_id].corr_id = i;
 				else{
 					int tmp_corr_lm_id = list_obs.features[obs_id].corr_id;
@@ -554,7 +566,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 
 void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 {
-	std::cout << "Synchronization Wirh State Vector Before Association" << std::endl;
+	/* std::cout << "Synchronization Wirh State Vector Before Association" << std::endl; */
 
 	/*clear*/
 	observation->points.clear();
@@ -682,7 +694,7 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 
 void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 {
-	std::cout << "Merge landmarks" << std::endl;
+	/* std::cout << "Merge landmarks" << std::endl; */
 
 	list_lm.features[child_id].was_merged = true;
 	/*min-max*/
@@ -700,7 +712,7 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
 {
-	std::cout << "Update landmark information" << std::endl;
+	/* std::cout << "Update landmark information" << std::endl; */
 
 	list_lm.features[lm_id].was_observed_in_this_scan = true;
 	int obs_id = list_lm.features[lm_id].corr_id;
@@ -768,7 +780,7 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 
 void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 {
-	std::cout << "Synchronization Wirh State Vector After Association" << std::endl;
+	/* std::cout << "Synchronization Wirh State Vector After Association" << std::endl; */
 
 	/*clear*/
 	landmarks->points.clear();
@@ -846,7 +858,7 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 
 void PlanarLandmarkEKF::EraseLM(int index)
 {
-	std::cout << "Erase landmark" << std::endl;
+	/* std::cout << "Erase landmark" << std::endl; */
 
 	/*keep*/
 	list_erased_lm.features.push_back(list_lm.features[index]);
@@ -860,7 +872,6 @@ void PlanarLandmarkEKF::EraseLM(int index)
 	X.resize(X.size() - size_lm_state);
 	X.segment(0, delimit_point) = tmp_X.segment(0, delimit_point);
 	X.segment(delimit_point, X.size() - delimit_point) = tmp_X.segment(delimit_point_, tmp_X.size() - delimit_point_);
-	std::cout << "test 1" << std::endl;
 	/*P*/
 	Eigen::MatrixXd tmp_P = P;
 	P.resize(P.cols() - size_lm_state, P.rows() - size_lm_state);
@@ -872,10 +883,8 @@ void PlanarLandmarkEKF::EraseLM(int index)
 	P.block(delimit_point, 0, P.rows()-delimit_point, delimit_point) = tmp_P.block(delimit_point_, 0, tmp_P.rows()-delimit_point_, delimit_point);
 	/*P-lower-right*/
 	P.block(delimit_point, delimit_point, P.rows()-delimit_point, P.cols()-delimit_point) = tmp_P.block(delimit_point_, delimit_point_, tmp_P.rows()-delimit_point_, tmp_P.cols()-delimit_point_);
-	std::cout << "test 2" << std::endl;
 	/*list LM observed at the same time*/
 	for(size_t i=0;i<list_lm.features.size();++i)	list_lm.features[i].list_lm_observed_simul.erase(list_lm.features[i].list_lm_observed_simul.begin() + index);
-	std::cout << "test 3" << std::endl;
 }
 
 void PlanarLandmarkEKF::CallbackDGaussianSphere(const sensor_msgs::PointCloud2ConstPtr &msg)
@@ -1482,7 +1491,7 @@ Eigen::Vector3d PlanarLandmarkEKF::PointWallFrameToGlobal(const Eigen::Vector3d&
 
 void PlanarLandmarkEKF::Publication(void)
 {
-	std::cout << "Publication" << std::endl;
+	/* std::cout << "Publication" << std::endl; */
 
 	for(int i=3;i<6;i++){	//test
 		if(fabs(X(i))>M_PI){
