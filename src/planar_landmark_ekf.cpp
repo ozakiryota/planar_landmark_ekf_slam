@@ -410,6 +410,8 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 
 void PlanarLandmarkEKF::DataAssociation(void)
 {
+	double time_start = ros::Time::now().toSec();
+
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
 	/* const double search_radius = 0.1; */
@@ -446,6 +448,8 @@ void PlanarLandmarkEKF::DataAssociation(void)
 			}
 		}
 	}
+
+	std::cout << "DataAssociation time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs)
@@ -550,6 +554,7 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 void PlanarLandmarkEKF::UpdateFeatures(void)
 {
 	std::cout << "Update features" << std::endl;
+	double time_start = ros::Time::now().toSec();
 
 	/*stack (new registration or update)*/
 	Eigen::VectorXd Xnew(0);
@@ -596,6 +601,8 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	const double initial_lm_sigma = 0.01;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
+
+	std::cout << "UpdateFeatures time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
@@ -958,7 +965,7 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 	}
 
 	/*test*/
-	const int highlighted_lm = 10;
+	const int highlighted_lm = 13;
 	if(lm.id == highlighted_lm){
 		tmp.color.r = 0.0;
 		tmp.color.g = 1.0;
