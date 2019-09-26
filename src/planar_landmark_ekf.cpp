@@ -324,7 +324,7 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 
 void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg)
 {
-	std::cout << "Callback Features" << std::endl;
+	std::cout << "===== Callback Features =====" << std::endl;
 	std::cout << "msg->features.size() = " << msg->features.size() << std::endl;
 	std::cout << "list_lm.features.size() = " << list_lm.features.size() << std::endl;
 
