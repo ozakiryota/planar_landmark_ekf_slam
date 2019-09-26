@@ -417,10 +417,8 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 
 void PlanarLandmarkEKF::DataAssociation(void)
 {
-	double time_start = ros::Time::now().toSec();
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
-	std::cout << "setInputCloud time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/* const double search_radius = 0.1; */
 	for(size_t i=0;i<list_lm.features.size();++i){
 		/*kdtree search*/
@@ -559,6 +557,7 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 void PlanarLandmarkEKF::UpdateFeatures(void)
 {
 	std::cout << "Update features" << std::endl;
+	double time_start = ros::Time::now().toSec();
 
 	/*stack (new registration or update)*/
 	Eigen::VectorXd Xnew(0);
@@ -596,8 +595,10 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 		}
 	}
+	std::cout << "stack point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*update*/
 	if(Zstacked.size()>0 && inipose_is_available)   UpdateComputation(Zstacked, Hstacked, jHstacked, Diag_sigma);
+	std::cout << "computation point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*new registration*/
 	X.conservativeResize(X.size() + Xnew.size());
 	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
@@ -605,6 +606,7 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	const double initial_lm_sigma = 0.01;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
+	std::cout << "new registration point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
