@@ -14,4 +14,7 @@ int64 corr_id
 int64 corr_dist
 int64[] list_lm_observed_simul
 bool was_observed_in_this_scan
+int64 counter_match
+int64 counter_nomatch
 bool was_merged
+bool was_erased

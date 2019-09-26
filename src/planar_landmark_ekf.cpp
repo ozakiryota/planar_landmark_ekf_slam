@@ -337,7 +337,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	DataSyncAfterAssoc();
 	/*erase*/
 	for(size_t i=0;i<list_lm.features.size();){
-		if(list_lm.features[i].was_merged)	EraseLM(i);
+		if(list_lm.features[i].was_merged || list_lm.features[i].was_erased)	EraseLM(i);
 		else	++i;
 	}
 
@@ -395,6 +395,7 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 		list_obs.features[i].corr_id = -1;
 		list_obs.features[i].was_observed_in_this_scan = true;
 		list_obs.features[i].was_merged = false;
+		list_obs.features[i].was_erased = false;
 	}
 	/*landmarks*/
 	for(int i=0;i<list_lm.features.size();++i){
@@ -692,12 +693,22 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 		list_lm.features[i].id = i;
 		list_lm.features[i].corr_id = -1;
 
-		/*list lm observed simul*/
+		/*match or no-match*/
+		const int threshold_counter_match = 100;
+		const int threshold_counter_nomatch = 200;
 		list_lm.features[i].list_lm_observed_simul.resize(list_lm.features.size(), false);	//keeps valuses and inputs "false" into new memories
 		if(list_lm.features[i].was_observed_in_this_scan){
+			/*counter*/
+			list_lm.features[i].counter_match++;
+			/*list lm observed simul*/
 			for(size_t j=0;j<list_lm.features.size();++j){
 				if(list_lm.features[j].was_observed_in_this_scan)	list_lm.features[i].list_lm_observed_simul[j] = true;
 			}
+		}
+		else{
+			/*counter*/
+			list_lm.features[i].counter_nomatch++;
+			if(list_lm.features[i].counter_match < threshold_counter_match && list_lm.features[i].counter_nomatch > threshold_counter_nomatch)	list_lm.features[i].was_erased = true;
 		}
 
 		/*visual origin position*/
@@ -897,7 +908,7 @@ void PlanarLandmarkEKF::Publication(void)
 
 void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm)
 {
-	const double thickness = 0.1;
+	const double thickness = 0.05;
 
 	visualization_msgs::Marker tmp;
 	tmp.header.frame_id = "/odom";
@@ -908,6 +919,7 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 	tmp.pose = lm.origin;
 	tmp.type = visualization_msgs::Marker::CUBE;
 	tmp.scale = lm.scale;
+	tmp.scale.x = thickness;
 	if(lm.was_observed_in_this_scan){
 		tmp.color.r = 1.0;
 		tmp.color.g = 0.0;
@@ -918,6 +930,12 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.r = 1.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 0.0;
+		tmp.color.a = 0.9;
+	}
+	else if(lm.was_erased){
+		tmp.color.r = 1.0;
+		tmp.color.g = 1.0;
+		tmp.color.b = 1.0;
 		tmp.color.a = 0.9;
 	}
 	else{
