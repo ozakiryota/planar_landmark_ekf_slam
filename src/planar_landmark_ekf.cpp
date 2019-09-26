@@ -711,6 +711,7 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 		/*visual origin orientation*/
 		std::vector<Eigen::Vector3d> tmp_axes(3);
 		tmp_axes[0] = -Ng.normalized();
+		if(!list_lm.features[i].normal_is_inward)	tmp_axes[0] *= -1;
 		tmp_axes[1] = (Origin - Ng).normalized();
 		tmp_axes[2] = (tmp_axes[0].cross(tmp_axes[1])).normalized();
 		Eigen::Matrix3d Axes;

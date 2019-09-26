@@ -54,7 +54,7 @@ PlanarNormalEstimation::PlanarNormalEstimation()
 {
 	sub_pc = nh.subscribe("/velodyne_points", 1, &PlanarNormalEstimation::CallbackPC, this);
 	pub_nc = nh.advertise<sensor_msgs::PointCloud2>("/normals", 1);
-	pub_vis_gauss = nh.advertise<sensor_msgs::PointCloud2>("/d_gaussian_sphere", 1);
+	pub_vis_gauss = nh.advertise<sensor_msgs::PointCloud2>("/selected_d_gaussian_sphere", 1);
 	viewer.setBackgroundColor(1, 1, 1);
 	viewer.addCoordinateSystem(1.0, "axis");
 	// viewer.setCameraPosition(-30.0, 0.0, 10.0, 0.0, 0.0, 1.0);
@@ -238,9 +238,9 @@ void PlanarNormalEstimation::Visualization(void)
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 1, "selected_noramls");
 	/*d-gaussian sphere*/
 	viewer.addPointCloud(d_gaussian_sphere, "d_gaussian_sphere");
-	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.8, "d_gaussian_sphere");
+	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 0.0, "d_gaussian_sphere");
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "d_gaussian_sphere");
-	/*d-gaussian sphere*/
+	/*selected d-gaussian sphere*/
 	viewer.addPointCloud(selected_d_gaussian_sphere, "selected_d_gaussian_sphere");
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "selected_d_gaussian_sphere");
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "selected_d_gaussian_sphere");

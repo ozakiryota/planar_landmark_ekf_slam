@@ -52,8 +52,8 @@ PlanarFeatureExtraction::PlanarFeatureExtraction()
 	
 	viewer.setBackgroundColor(1, 1, 1);
 	viewer.addCoordinateSystem(1.0, "axis");
-	viewer.setCameraPosition(-30.0, 0.0, 10.0, 0.0, 0.0, 1.0);
-	/* viewer.setCameraPosition(0.0, 0.0, 35.0, 0.0, 0.0, 0.0); */
+	/* viewer.setCameraPosition(-30.0, 0.0, 20.0, 0.0, 0.0, 1.0); */
+	viewer.setCameraPosition(0.0, 0.0, 35.0, 0.0, 0.0, 0.0);
 
 	nhPrivate.param("cluster_tolerance", cluster_tolerance, 0.1);
 	nhPrivate.param("min_cluster_size", min_cluster_size, 100);
