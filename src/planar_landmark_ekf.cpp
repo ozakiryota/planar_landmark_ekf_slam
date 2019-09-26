@@ -66,6 +66,7 @@ class PlanarLandmarkEKF{
 		visualization_msgs::MarkerArray planes;
 		/*parameters*/
 		double threshold_corr_dist;
+		double threshold_corr_position_diff;
 	public:
 		PlanarLandmarkEKF();
 		void CallbackInipose(const geometry_msgs::QuaternionConstPtr& msg);
@@ -122,6 +123,8 @@ PlanarLandmarkEKF::PlanarLandmarkEKF()
 	/*parameters*/
 	nhPrivate.param("threshold_corr_dist", threshold_corr_dist, 0.1);
 	std::cout << "threshold_corr_dist = " << threshold_corr_dist << std::endl;
+	nhPrivate.param("threshold_corr_position_diff", threshold_corr_position_diff, 0.5);
+	std::cout << "threshold_corr_position_diff = " << threshold_corr_position_diff << std::endl;
 }
 
 void PlanarLandmarkEKF::CallbackInipose(const geometry_msgs::QuaternionConstPtr& msg)
@@ -394,6 +397,8 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 		list_obs.features[i].normal_is_inward = CheckNormalIsInward(Ng);
 		list_obs.features[i].corr_id = -1;
 		list_obs.features[i].was_observed_in_this_scan = true;
+		list_obs.features[i].counter_match = 0;
+		list_obs.features[i].counter_nomatch = 0;
 		list_obs.features[i].was_merged = false;
 		list_obs.features[i].was_erased = false;
 	}
@@ -502,7 +507,6 @@ bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar
 	Eigen::Vector3d SumWidth = (ObsMax - ObsMin)/2.0 + (LmMax - LmMin)/2.0;
 	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
 
-	const double threshold_corr_position_diff = 0.2;
 	for(size_t i=0;i<CentDist.size();++i){
 		/* if(CentDist(i) > SumWidth(i))	return false; */
 		if(CentDist(i) > SumWidth(i) + threshold_corr_position_diff){
@@ -521,6 +525,7 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 {
 	/* std::cout << "Merge landmarks" << std::endl; */
 
+	/*flag*/
 	list_lm.features[child_id].was_merged = true;
 	/*min-max*/
 	if(list_lm.features[parent_id].min_global.x > list_lm.features[child_id].min_global.x)	list_lm.features[parent_id].min_global.x = list_lm.features[child_id].min_global.x;
@@ -533,6 +538,9 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 	for(size_t i=0;i<list_lm.features[child_id].list_lm_observed_simul.size();++i){
 		if(list_lm.features[child_id].list_lm_observed_simul[i]) list_lm.features[parent_id].list_lm_observed_simul[i] = list_lm.features[child_id].list_lm_observed_simul[i];
 	}
+	/*counter*/
+	list_lm.features[parent_id].counter_match += list_lm.features[child_id].counter_match;
+	list_lm.features[parent_id].counter_nomatch += list_lm.features[child_id].counter_nomatch;
 }
 
 void PlanarLandmarkEKF::UpdateFeatures(void)
