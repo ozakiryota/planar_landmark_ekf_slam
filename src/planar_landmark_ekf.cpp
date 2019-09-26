@@ -954,13 +954,13 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 	}
 
 	/*test*/
-	/* const int highlighted_lm = 2; */
-	/* if(lm.id == highlighted_lm){ */
-	/* 	tmp.color.r = 1.0; */
-	/* 	tmp.color.g = 1.0; */
-	/* 	tmp.color.b = 1.0; */
-	/* 	tmp.color.a = 0.9; */
-	/* } */
+	const int highlighted_lm = 10;
+	if(lm.id == highlighted_lm){
+		tmp.color.r = 0.0;
+		tmp.color.g = 1.0;
+		tmp.color.b = 1.0;
+		tmp.color.a = 0.9;
+	}
 	/*test*/
 	/* tmp.pose.orientation.x = 0; */
 	/* tmp.pose.orientation.y = 0; */
