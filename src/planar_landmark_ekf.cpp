@@ -938,13 +938,13 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.r = 1.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 0.0;
-		tmp.color.a = 0.9;
+		tmp.color.a = 0.4;
 	}
 	else if(lm.was_erased){
 		tmp.color.r = 1.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 1.0;
-		tmp.color.a = 0.9;
+		tmp.color.a = 0.4;
 	}
 	else{
 		tmp.color.r = 0.0;
@@ -959,7 +959,8 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.r = 0.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 1.0;
-		tmp.color.a = 0.9;
+		if(lm.was_observed_in_this_scan)	tmp.color.a = 0.9;
+		else	tmp.color.a = 0.4;
 	}
 	/*test*/
 	/* tmp.pose.orientation.x = 0; */

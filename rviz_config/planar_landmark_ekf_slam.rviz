@@ -229,6 +229,16 @@ Visualization Manager:
       Position Tolerance: 0.5
       Topic: /ekf/odom
       Value: true
+    - Angle Tolerance: 1
+      Class: rviz/Odometry
+      Color: 255; 255; 0
+      Enabled: true
+      Keep: 10000
+      Length: 0.5
+      Name: Odometry
+      Position Tolerance: 0.5
+      Topic: /gyrodometry
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
