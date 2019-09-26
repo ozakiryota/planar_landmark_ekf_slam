@@ -417,8 +417,10 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 
 void PlanarLandmarkEKF::DataAssociation(void)
 {
+	double time_start = ros::Time::now().toSec();
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
+	std::cout << "setInputCloud time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/* const double search_radius = 0.1; */
 	for(size_t i=0;i<list_lm.features.size();++i){
 		/*kdtree search*/
