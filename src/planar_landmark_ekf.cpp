@@ -424,6 +424,7 @@ void PlanarLandmarkEKF::DataAssociation(void)
 		if(neighbor_obs_id.size() == 0)	std::cout << "lm_id = " << i << ": No neighbor" << std::endl;
 		/*search correspond*/
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
+			bool flag_break = true;
 			int obs_id = neighbor_obs_id[j];
 			if(Judge(list_lm.features[i], list_obs.features[obs_id])){
 				list_lm.features[i].corr_id = obs_id;
@@ -434,11 +435,14 @@ void PlanarLandmarkEKF::DataAssociation(void)
 					if(list_lm.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
 						/*compare*/
 						if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
-						else	list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
+						else{
+							list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
+							flag_break = false;
+						}
 					}
 					else	MergeLM(tmp_corr_lm_id, i);
 				}
-				break;
+				if(flag_break)	break;
 			}
 		}
 	}
