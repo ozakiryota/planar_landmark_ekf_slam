@@ -328,16 +328,22 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	std::cout << "msg->features.size() = " << msg->features.size() << std::endl;
 	std::cout << "list_lm.features.size() = " << list_lm.features.size() << std::endl;
 
+	double time_start = ros::Time::now().toSec();
+
 	/*input*/
 	time_publish = msg->header.stamp;
 	list_obs = *msg;
 	DataSyncBeforeAssoc();
+	std::cout << "DataSyncBeforeAssoc point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*data association*/
 	DataAssociation();
+	std::cout << "DataAssociation point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*observation uodate*/
 	UpdateFeatures();
+	std::cout << "UpdateFeatures point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*Data Synchronization*/
 	DataSyncAfterAssoc();
+	std::cout << "DataSyncAfterAssoc point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*erase*/
 	for(size_t i=0;i<list_lm.features.size();){
 		if(list_lm.features[i].was_merged || list_lm.features[i].was_erased)	EraseLM(i);
@@ -345,6 +351,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	}
 
 	Publication();
+	std::cout << "CallbackFeatures time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
@@ -410,8 +417,6 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 
 void PlanarLandmarkEKF::DataAssociation(void)
 {
-	double time_start = ros::Time::now().toSec();
-
 	pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 	kdtree.setInputCloud(observation);
 	/* const double search_radius = 0.1; */
@@ -448,8 +453,6 @@ void PlanarLandmarkEKF::DataAssociation(void)
 			}
 		}
 	}
-
-	std::cout << "DataAssociation time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs)
@@ -554,7 +557,6 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 void PlanarLandmarkEKF::UpdateFeatures(void)
 {
 	std::cout << "Update features" << std::endl;
-	double time_start = ros::Time::now().toSec();
 
 	/*stack (new registration or update)*/
 	Eigen::VectorXd Xnew(0);
@@ -601,8 +603,6 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	const double initial_lm_sigma = 0.01;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
-
-	std::cout << "UpdateFeatures time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
