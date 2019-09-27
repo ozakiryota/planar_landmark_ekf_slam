@@ -7,9 +7,6 @@
 	<node pkg="pose_estimation_walls" name="odom_republish_infant" type="odom_republish_infant"/>
 
 	<!-- proposed method -->
-	<node pkg="gyrodometry" name="initial_alignment" type="initial_alignment" output="screen">
-		<param name="initial_orientation_is_0001" type="bool" value="true"/>
-	</node>
 	<node pkg="planar_landmark_ekf_slam" name="planar_normal_estimation" type="planar_normal_estimation">
 		<param name="skip" type="int" value="3"/>
 		<param name="search_radius_ratio" type="double" value="0.09"/>
