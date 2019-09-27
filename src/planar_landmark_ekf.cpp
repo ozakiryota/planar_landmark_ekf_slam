@@ -118,7 +118,7 @@ PlanarLandmarkEKF::PlanarLandmarkEKF()
 	pub_variance = nh.advertise<std_msgs::Float64MultiArray>("variance", 1);
 	/*state*/
 	X = Eigen::VectorXd::Zero(size_robot_state);
-	const double initial_sigma = 0.1;
+	const double initial_sigma = 0.001;
 	P = initial_sigma*Eigen::MatrixXd::Identity(size_robot_state, size_robot_state);
 	/*parameters*/
 	nhPrivate.param("threshold_corr_dist", threshold_corr_dist, 0.1);
@@ -623,7 +623,7 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	X.conservativeResize(X.size() + Xnew.size());
 	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
 	Eigen::MatrixXd Ptmp = P;
-	const double initial_lm_sigma = 0.01;
+	const double initial_lm_sigma = 0.001;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
 }
