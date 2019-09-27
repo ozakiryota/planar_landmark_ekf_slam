@@ -614,6 +614,7 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 			VectorVStack(Hstacked, H);
 			MatrixVStack(jHstacked, jH);
 			double tmp_sigma = 0.1*1000/(double)list_obs.features[i].cluster_size;
+			std::cout << "tmp_sigma = " << tmp_sigma << std::endl;
 			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 		}
 	}
