@@ -369,24 +369,47 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 		tmp_point.z = list_obs.features[i].point_local.z;
 		observation->points.push_back(tmp_point);
 		/*transformation*/
-		Eigen::Vector3d MinLocal(
-			list_obs.features[i].min_local.x,
-			list_obs.features[i].min_local.y,
-			list_obs.features[i].min_local.z
-		);
-		Eigen::Vector3d MaxLocal(
-			list_obs.features[i].max_local.x,
-			list_obs.features[i].max_local.y,
-			list_obs.features[i].max_local.z
-		);
 		Eigen::Vector3d Nl(
 			list_obs.features[i].point_local.x,
 			list_obs.features[i].point_local.y,
 			list_obs.features[i].point_local.z
 		);
-		Eigen::Vector3d MinGlobal = PointLocalToGlobal(MinLocal);
-		Eigen::Vector3d MaxGlobal = PointLocalToGlobal(MaxLocal);
 		Eigen::Vector3d Ng = PlaneLocalToGlobal(Nl);
+		std::vector<Eigen::Vector3d> list_minmax_point(4);
+		list_minmax_point[0] = {
+			list_obs.features[i].min_local.x,
+			list_obs.features[i].min_local.y,
+			list_obs.features[i].min_local.z
+		};
+		list_minmax_point[1] = {
+			list_obs.features[i].max_local.x,
+			list_obs.features[i].max_local.y,
+			list_obs.features[i].max_local.z
+		};
+		list_minmax_point[2] = {
+			list_obs.features[i].min_local.x,
+			list_obs.features[i].max_local.y,
+			list_obs.features[i].max_local.z
+		};
+		list_minmax_point[3] = {
+			list_obs.features[i].max_local.x,
+			list_obs.features[i].min_local.y,
+			list_obs.features[i].min_local.z
+		};
+		Eigen::Vector3d MinGlobal, MaxGlobal;
+		for(size_t j=0;i<list_minmax_point.size();j++){
+			Eigen::Vector3d Tmp = PointLocalToGlobal(list_minmax_point[j]);
+			if(j==0){
+				MinGlobal = Tmp;
+				MaxGlobal = Tmp;
+			}
+			else{
+				for(size_t k=0;k<Tmp.size();k++){
+					if(MinGlobal(k) > Tmp(k))	MinGlobal(k) = Tmp(k);
+					if(MaxGlobal(k) > Tmp(k))	MaxGlobal(k) = Tmp(k);
+				}
+			}
+		}
 		Eigen::Vector3d Cent = MinGlobal + (MaxGlobal - MinGlobal)/2.0;
 		/*input*/
 		list_obs.features[i].min_global.x = MinGlobal(0);
