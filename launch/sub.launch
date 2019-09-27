@@ -16,6 +16,7 @@
 		<!-- <param name="mode_selection" type="bool" value="false"/> -->
 	</node>
 	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction">
+		<remap from="/normals" to="/selected_normals"/>
 		<param name="cluster_tolerance" type="double" value="0.1"/>
 		<!-- <param name="min_cluster_size" type="int" value="150"/> -->
 		<param name="min_cluster_size" type="int" value="1000"/>

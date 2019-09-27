@@ -17,6 +17,7 @@ class PlanarNormalEstimation{
 		ros::Subscriber sub_pc;
 		/*publish*/
 		ros::Publisher pub_nc;
+		ros::Publisher pub_selected_nc;
 		ros::Publisher pub_vis_gauss;
 		/*pcl*/
 		pcl::visualization::PCLVisualizer viewer {"Planar Normal Estimation"};
@@ -54,6 +55,7 @@ PlanarNormalEstimation::PlanarNormalEstimation()
 {
 	sub_pc = nh.subscribe("/velodyne_points", 1, &PlanarNormalEstimation::CallbackPC, this);
 	pub_nc = nh.advertise<sensor_msgs::PointCloud2>("/normals", 1);
+	pub_selected_nc = nh.advertise<sensor_msgs::PointCloud2>("/selected_normals", 1);
 	pub_vis_gauss = nh.advertise<sensor_msgs::PointCloud2>("/selected_d_gaussian_sphere", 1);
 	viewer.setBackgroundColor(1, 1, 1);
 	viewer.addCoordinateSystem(1.0, "axis");
@@ -256,6 +258,14 @@ void PlanarNormalEstimation::Publication(void)
 	sensor_msgs::PointCloud2 nc_pub;
 	pcl::toROSMsg(*normals, nc_pub);
 	pub_nc.publish(nc_pub);	
+	/*nc*/
+	if(mode_selection){
+		selected_noramls->header.stamp = cloud->header.stamp;
+		selected_noramls->header.frame_id = cloud->header.frame_id;
+		sensor_msgs::PointCloud2 selected_nc_pub;
+		pcl::toROSMsg(*selected_noramls, selected_nc_pub);
+		pub_selected_nc.publish(selected_nc_pub);
+	}
 	/*gauss*/
 	selected_d_gaussian_sphere->header.stamp = cloud->header.stamp;
 	selected_d_gaussian_sphere->header.frame_id = cloud->header.frame_id;

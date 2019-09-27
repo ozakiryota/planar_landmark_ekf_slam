@@ -92,9 +92,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 0.162776306
+      Max Intensity: 0.165778279
       Min Color: 0; 0; 0
-      Min Intensity: 0.00101473904
+      Min Intensity: 0
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -116,7 +116,37 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 255; 255; 255
+      Color: 0; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 0; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.00999999978
+      Style: Points
+      Topic: /selected_normals
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 0; 255
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
@@ -129,10 +159,10 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 3
+      Size (Pixels): 1
       Size (m): 0.00999999978
       Style: Points
-      Topic: /d_gaussian_sphere
+      Topic: /selected_d_gaussian_sphere
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -196,5 +226,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1875
-  X: 45
+  X: 1965
   Y: 24
