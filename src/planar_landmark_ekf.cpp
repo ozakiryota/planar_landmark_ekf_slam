@@ -580,7 +580,6 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 void PlanarLandmarkEKF::UpdateFeatures(void)
 {
 	std::cout << "Update features" << std::endl;
-	double time_start = ros::Time::now().toSec();
 
 	/*stack (new registration or update)*/
 	Eigen::VectorXd Xnew(0);
@@ -614,14 +613,12 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 			VectorVStack(Zstacked, Z);
 			VectorVStack(Hstacked, H);
 			MatrixVStack(jHstacked, jH);
-			double tmp_sigma = 0.2*100/(double)list_obs.features[i].cluster_size;
+			double tmp_sigma = 0.1*1000/(double)list_obs.features[i].cluster_size;
 			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 		}
 	}
-	std::cout << "stack point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*update*/
 	if(Zstacked.size()>0 && inipose_is_available)   UpdateComputation(Zstacked, Hstacked, jHstacked, Diag_sigma);
-	std::cout << "computation point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*new registration*/
 	X.conservativeResize(X.size() + Xnew.size());
 	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
@@ -629,7 +626,6 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	const double initial_lm_sigma = 0.01;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
-	std::cout << "new registration point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 }
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
@@ -850,7 +846,6 @@ bool PlanarLandmarkEKF::CheckNormalIsInward(const Eigen::Vector3d& Ng)
 void PlanarLandmarkEKF::UpdateComputation(const Eigen::VectorXd& Z, const Eigen::VectorXd& H, const Eigen::MatrixXd& jH, const Eigen::VectorXd& Diag_sigma)
 {
 	std::cout << "Update computation" << std::endl;
-	double time_start = ros::Time::now().toSec();
 
 	Eigen::VectorXd Y = Z - H;
 	// const double sigma = 1.2e-1;	//using floor
