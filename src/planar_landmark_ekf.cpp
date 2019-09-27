@@ -397,7 +397,7 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 			list_obs.features[i].min_local.z
 		};
 		Eigen::Vector3d MinGlobal, MaxGlobal;
-		for(size_t j=0;i<list_minmax_point.size();j++){
+		for(size_t j=0;j<list_minmax_point.size();j++){
 			Eigen::Vector3d Tmp = PointLocalToGlobal(list_minmax_point[j]);
 			if(j==0){
 				MinGlobal = Tmp;
@@ -406,7 +406,7 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 			else{
 				for(size_t k=0;k<Tmp.size();k++){
 					if(MinGlobal(k) > Tmp(k))	MinGlobal(k) = Tmp(k);
-					if(MaxGlobal(k) > Tmp(k))	MaxGlobal(k) = Tmp(k);
+					if(MaxGlobal(k) < Tmp(k))	MaxGlobal(k) = Tmp(k);
 				}
 			}
 		}
