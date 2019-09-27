@@ -834,14 +834,11 @@ void PlanarLandmarkEKF::UpdateComputation(const Eigen::VectorXd& Z, const Eigen:
 	// Eigen::MatrixXd R = sigma*Eigen::MatrixXd::Identity(Z.size(), Z.size());
 	Eigen::MatrixXd R = Diag_sigma.asDiagonal();
 	Eigen::MatrixXd S = jH*P*jH.transpose() + R;
-	std::cout << "R, S point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	Eigen::MatrixXd K = P*jH.transpose()*S.inverse();
-	std::cout << "K point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	X = X + K*Y;
 	for(int i=3;i<6;i++)	X(i) = PiToPi(X(i));
 	Eigen::MatrixXd I = Eigen::MatrixXd::Identity(X.size(), X.size());
 	P = (I - K*jH)*P;
-	std::cout << "P point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 
 	/* std::cout << "K = " << std::endl << K << std::endl; */
 	/* std::cout << "K*Y = " << std::endl << K*Y << std::endl; */
