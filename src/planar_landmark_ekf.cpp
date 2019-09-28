@@ -1095,14 +1095,17 @@ PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(planar_landmark_ekf_
 void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
 {
 	const double max_observation_range = 10.0;
-	for(size_t i=0;i<list_lm_.features.size();++i){
+	for(size_t i=0;i<list_lm.features.size();){
 		Eigen::Vector3d Ng(
 			list_lm_.features[i].point_global.x,
 			list_lm_.features[i].point_global.y,
 			list_lm_.features[i].point_global.z
 		);
 		/*judge in direction of normal*/
-		if(list_lm_.features[i].normal_is_inward == CheckNormalIsInward_(Ng))	continue;
+		if(list_lm_.features[i].normal_is_inward == CheckNormalIsInward_(Ng)){
+			i++;
+			continue;
+		}
 		/*judge in observation range*/
 		Eigen::Vector3d LocalOrigin(
 			list_lm_.features[i].centroid.x - X(0),
@@ -1116,7 +1119,10 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 			(list_lm_.features[i].max_global.z - list_lm_.features[i].min_global.z)/2.0
 		);
 		for(size_t j=0;j<LocalOrigin.size();++j){
-			if(LocalOrigin(j) < MinMax(j)+max_observation_range)	continue;
+			if(LocalOrigin(j) < MinMax(j)+max_observation_range){
+				i++;
+				continue;
+			}
 		}
 		/*remove*/
 		int delimit0 = size_robot_state_ + i*size_lm_state_;
