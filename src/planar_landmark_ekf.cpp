@@ -72,6 +72,7 @@ class PlanarLandmarkEKF{
 			private:
 				planar_landmark_ekf_slam::PlanarFeatureArray list_lm_;
 				planar_landmark_ekf_slam::PlanarFeatureArray list_removed_lm_;
+				planar_landmark_ekf_slam::PlanarFeatureArray list_left_lm_;
 				Eigen::VectorXd X_;
 				Eigen::MatrixXd P_;
 				int size_robot_state_;
@@ -79,6 +80,7 @@ class PlanarLandmarkEKF{
 			public:
 				RemoveUnavailableLM(planar_landmark_ekf_slam::PlanarFeatureArray list_lm, const Eigen::VectorXd X, const Eigen::MatrixXd P, int size_robot_state, int size_lm_state);
 				void Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
+				void Recover(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
 				bool CheckNormalIsInward_(const Eigen::Vector3d& Ng);
 		};
 	public:
@@ -1104,6 +1106,7 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 		/*judge in direction of normal*/
 		if(list_lm_.features[i].normal_is_inward == CheckNormalIsInward_(Ng)){
 			i++;
+			list_left_lm_.features.push_back(list_lm_.features[i]);
 			continue;
 		}
 		/*judge in observation range*/
@@ -1118,22 +1121,22 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 			(list_lm_.features[i].max_global.y - list_lm_.features[i].min_global.y)/2.0,
 			(list_lm_.features[i].max_global.z - list_lm_.features[i].min_global.z)/2.0
 		);
-		for(size_t j=0;j<LocalOrigin.size();++j){
-			if(LocalOrigin(j) < MinMax(j)+max_observation_range){
-				i++;
-				continue;
-			}
+		if(LocalOrigin(0) < MinMax(0)+max_observation_range
+			|| LocalOrigin(1) < MinMax(1)+max_observation_range
+			|| LocalOrigin(2) < MinMax(2)+max_observation_range
+		){
+			i++;
+			list_left_lm_.features.push_back(list_lm_.features[i]);
+			continue;
 		}
 		/*remove*/
 		int delimit0 = size_robot_state_ + i*size_lm_state_;
 		int delimit1 = size_robot_state_ + (i+1)*size_lm_state_;
 		/*X*/
-		// Eigen::VectorXd tmp_X = X;
 		X.resize(X_.size() - size_lm_state_);
 		X.segment(0, delimit0) = X_.segment(0, delimit0);
 		X.segment(delimit0, X.size() - delimit0) = X_.segment(delimit1, X_.size() - delimit1);
 		/*P*/
-		// Eigen::MatrixXd tmp_P = P;
 		P.resize(P_.cols() - size_lm_state_, P_.rows() - size_lm_state_);
 		/*P-upper-left*/
 		P.block(0, 0, delimit0, delimit0) = P_.block(0, 0, delimit0, delimit0);
@@ -1143,11 +1146,54 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 		P.block(delimit0, 0, P.rows()-delimit0, delimit0) = P_.block(delimit1, 0, P_.rows()-delimit1, delimit0);
 		/*P-lower-right*/
 		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = P_.block(delimit1, delimit1, P_.rows()-delimit1, P_.cols()-delimit1);
-		/*LM list*/
+		/*lm list*/
 		list_removed_lm_.features.push_back(list_lm_.features[i]);
 		list_lm.features.erase(list_lm.features.begin() + i);
-		/*list LM observed simul*/
-		for(size_t j=0;j<list_lm.features.size();++j)	list_lm.features[j].list_lm_observed_simul.erase(list_lm.features[j].list_lm_observed_simul.begin() + i);
+		for(size_t j=0;j<list_lm.features.size();++j){
+			list_lm.features[j].list_lm_observed_simul.erase(list_lm.features[j].list_lm_observed_simul.begin() + i);
+			list_lm.features[j].id = j;
+		}
+	}
+}
+void PlanarLandmarkEKF::RemoveUnavailableLM::Recover(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
+{
+	/*robot state*/
+	X_.segment(0, size_robot_state_) = X.segment(0, size_robot_state_);
+	P_.block(0, 0, size_robot_state_, size_robot_state_) = P.block(0, 0, size_robot_state_, size_robot_state_);
+	/*LM state*/
+	for(size_t i=0;i<list_left_lm_.features.size();++i){
+		X_.segment(size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_, size_lm_state_) = X.segment(size_robot_state_ + i*size_lm_state_, size_lm_state_);
+		/*P-row-left*/
+		P_.block(
+			size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_,
+			0,
+			size_lm_state_,
+			size_robot_state_
+		) = P.block(size_robot_state_ + i*size_lm_state_, 0, size_lm_state_, size_robot_state_);
+		/*P-col-upper*/
+		P_.block(
+			0,
+			size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_,
+			size_robot_state_,
+			size_lm_state_
+		) = P.block(0, size_robot_state_ + i*size_lm_state_, size_robot_state_, size_lm_state_);
+		/*p-inside*/
+		for(size_t j=0;j<list_left_lm_.features.size();j++){
+			P_.block(
+				size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_,
+				size_robot_state_ + list_left_lm_.features[j].id*size_lm_state_,
+				size_lm_state_,
+				size_lm_state_
+			) = P.block(size_robot_state_ + i*size_lm_state_, size_robot_state_ + j*size_lm_state_, size_lm_state_, size_lm_state_);
+		}
+	}
+	X = X_;
+	P = P_;
+	/*lm list*/
+	for(size_t i=0;i<list_removed_lm_.features.size();i++)	list_lm.features.insert(list_lm.features.begin() + list_removed_lm_.features[i].id, list_removed_lm_.features[i]);
+	for(size_t i=0;i<list_lm.features.size();++i){
+		list_lm.features[i].id = i;
+		list_lm.features[i].list_lm_observed_simul = list_lm_.features[i].list_lm_observed_simul;
 	}
 }
 bool PlanarLandmarkEKF::RemoveUnavailableLM::CheckNormalIsInward_(const Eigen::Vector3d& Ng)
