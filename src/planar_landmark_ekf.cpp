@@ -67,6 +67,20 @@ class PlanarLandmarkEKF{
 		/*parameters*/
 		double threshold_corr_dist;
 		double threshold_corr_position_diff;
+		/*class*/
+		class RemoveUnavailableLM{
+			private:
+				planar_landmark_ekf_slam::PlanarFeatureArray list_lm_;
+				planar_landmark_ekf_slam::PlanarFeatureArray list_removed_lm_;
+				Eigen::VectorXd X_;
+				Eigen::MatrixXd P_;
+				int size_robot_state_;
+				int size_lm_state_;
+			public:
+				RemoveUnavailableLM(planar_landmark_ekf_slam::PlanarFeatureArray list_lm, const Eigen::VectorXd X, const Eigen::MatrixXd P, int size_robot_state, int size_lm_state);
+				void Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
+				bool CheckNormalIsInward_(const Eigen::Vector3d& Ng);
+		};
 	public:
 		PlanarLandmarkEKF();
 		void CallbackInipose(const geometry_msgs::QuaternionConstPtr& msg);
@@ -806,24 +820,24 @@ void PlanarLandmarkEKF::EraseLM(int index)
 	/*list*/
 	list_lm.features.erase(list_lm.features.begin() + index);
 	/*delmit point*/
-	int delimit_point = size_robot_state + index*size_lm_state;
-	int delimit_point_ = size_robot_state + (index+1)*size_lm_state;
+	int delimit0 = size_robot_state + index*size_lm_state;
+	int delimit1 = size_robot_state + (index+1)*size_lm_state;
 	/*X*/
 	Eigen::VectorXd tmp_X = X;
 	X.resize(X.size() - size_lm_state);
-	X.segment(0, delimit_point) = tmp_X.segment(0, delimit_point);
-	X.segment(delimit_point, X.size() - delimit_point) = tmp_X.segment(delimit_point_, tmp_X.size() - delimit_point_);
+	X.segment(0, delimit0) = tmp_X.segment(0, delimit0);
+	X.segment(delimit0, X.size() - delimit0) = tmp_X.segment(delimit1, tmp_X.size() - delimit1);
 	/*P*/
 	Eigen::MatrixXd tmp_P = P;
 	P.resize(P.cols() - size_lm_state, P.rows() - size_lm_state);
 	/*P-upper-left*/
-	P.block(0, 0, delimit_point, delimit_point) = tmp_P.block(0, 0, delimit_point, delimit_point);
+	P.block(0, 0, delimit0, delimit0) = tmp_P.block(0, 0, delimit0, delimit0);
 	/*P-upper-right*/
-	P.block(0, delimit_point, delimit_point, P.cols()-delimit_point) = tmp_P.block(0, delimit_point_, delimit_point, tmp_P.cols()-delimit_point_);
+	P.block(0, delimit0, delimit0, P.cols()-delimit0) = tmp_P.block(0, delimit1, delimit0, tmp_P.cols()-delimit1);
 	/*P-lower-left*/
-	P.block(delimit_point, 0, P.rows()-delimit_point, delimit_point) = tmp_P.block(delimit_point_, 0, tmp_P.rows()-delimit_point_, delimit_point);
+	P.block(delimit0, 0, P.rows()-delimit0, delimit0) = tmp_P.block(delimit1, 0, tmp_P.rows()-delimit1, delimit0);
 	/*P-lower-right*/
-	P.block(delimit_point, delimit_point, P.rows()-delimit_point, P.cols()-delimit_point) = tmp_P.block(delimit_point_, delimit_point_, tmp_P.rows()-delimit_point_, tmp_P.cols()-delimit_point_);
+	P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = tmp_P.block(delimit1, delimit1, tmp_P.rows()-delimit1, tmp_P.cols()-delimit1);
 	/*id*/
 	for(size_t i=0;i<list_lm.features.size();++i){
 		list_lm.features[i].id = i; 
@@ -1068,6 +1082,79 @@ double PlanarLandmarkEKF::PiToPi(double angle)
 {
 	/* return fmod(angle + M_PI, 2*M_PI) - M_PI; */
 	return atan2(sin(angle), cos(angle)); 
+}
+
+PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(planar_landmark_ekf_slam::PlanarFeatureArray list_lm, const Eigen::VectorXd X, const Eigen::MatrixXd P, int size_robot_state, int size_lm_state)
+{
+	list_lm_ = list_lm;
+	X_ = X;
+	P_ = P;
+	size_robot_state_ = size_robot_state;
+	size_lm_state_ = size_lm_state;
+}
+void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
+{
+	const double max_observation_range = 10.0;
+	for(size_t i=0;i<list_lm_.features.size();++i){
+		Eigen::Vector3d Ng(
+			list_lm_.features[i].point_global.x,
+			list_lm_.features[i].point_global.y,
+			list_lm_.features[i].point_global.z
+		);
+		/*judge in direction of normal*/
+		if(list_lm_.features[i].normal_is_inward == CheckNormalIsInward_(Ng))	continue;
+		/*judge in observation range*/
+		Eigen::Vector3d LocalOrigin(
+			list_lm_.features[i].centroid.x - X(0),
+			list_lm_.features[i].centroid.y - X(1),
+			list_lm_.features[i].centroid.z - X(2)
+		);
+		LocalOrigin = LocalOrigin.cwiseAbs();
+		Eigen::Vector3d MinMax(
+			(list_lm_.features[i].max_global.x - list_lm_.features[i].min_global.x)/2.0,
+			(list_lm_.features[i].max_global.y - list_lm_.features[i].min_global.y)/2.0,
+			(list_lm_.features[i].max_global.z - list_lm_.features[i].min_global.z)/2.0
+		);
+		for(size_t j=0;j<LocalOrigin.size();++j){
+			if(LocalOrigin(j) < MinMax(j)+max_observation_range)	continue;
+		}
+		/*remove*/
+		int delimit0 = size_robot_state_ + i*size_lm_state_;
+		int delimit1 = size_robot_state_ + (i+1)*size_lm_state_;
+		/*X*/
+		// Eigen::VectorXd tmp_X = X;
+		X.resize(X_.size() - size_lm_state_);
+		X.segment(0, delimit0) = X_.segment(0, delimit0);
+		X.segment(delimit0, X.size() - delimit0) = X_.segment(delimit1, X_.size() - delimit1);
+		/*P*/
+		// Eigen::MatrixXd tmp_P = P;
+		P.resize(P_.cols() - size_lm_state_, P_.rows() - size_lm_state_);
+		/*P-upper-left*/
+		P.block(0, 0, delimit0, delimit0) = P_.block(0, 0, delimit0, delimit0);
+		/*P-upper-right*/
+		P.block(0, delimit0, delimit0, P.cols()-delimit0) = P_.block(0, delimit1, delimit0, P_.cols()-delimit1);
+		/*P-lower-left*/
+		P.block(delimit0, 0, P.rows()-delimit0, delimit0) = P_.block(delimit1, 0, P_.rows()-delimit1, delimit0);
+		/*P-lower-right*/
+		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = P_.block(delimit1, delimit1, P_.rows()-delimit1, P_.cols()-delimit1);
+		/*LM list*/
+		list_removed_lm_.features.push_back(list_lm_.features[i]);
+		list_lm.features.erase(list_lm.features.begin() + i);
+		/*list LM observed simul*/
+		for(size_t j=0;j<list_lm.features.size();++j)	list_lm.features[j].list_lm_observed_simul.erase(list_lm.features[j].list_lm_observed_simul.begin() + i);
+	}
+}
+bool PlanarLandmarkEKF::RemoveUnavailableLM::CheckNormalIsInward_(const Eigen::Vector3d& Ng)
+{
+	Eigen::Vector3d VerticalPosition = X_.segment(0, 3).dot(Ng)/Ng.dot(Ng)*Ng;
+	double dot = VerticalPosition.dot(Ng);
+	if(dot<0)	return true;
+	else{
+		double dist_wall = Ng.norm();
+		double dist_robot = VerticalPosition.norm();
+		if(dist_robot<dist_wall)	return true;
+		else	return false;
+	}
 }
 
 int main(int argc, char** argv)
