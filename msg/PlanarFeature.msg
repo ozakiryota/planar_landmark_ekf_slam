@@ -18,3 +18,4 @@ int64 counter_match
 int64 counter_nomatch
 bool was_merged
 bool was_erased
+bool observable

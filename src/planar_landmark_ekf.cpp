@@ -67,12 +67,15 @@ class PlanarLandmarkEKF{
 		/*parameters*/
 		double threshold_corr_dist;
 		double threshold_corr_position_diff;
+		bool mode_remove_unavailable_lm = true;
 		/*class*/
 		class RemoveUnavailableLM{
 			private:
 				planar_landmark_ekf_slam::PlanarFeatureArray list_lm_;
-				planar_landmark_ekf_slam::PlanarFeatureArray list_removed_lm_;
-				planar_landmark_ekf_slam::PlanarFeatureArray list_left_lm_;
+				// planar_landmark_ekf_slam::PlanarFeatureArray list_removed_lm_;
+				// planar_landmark_ekf_slam::PlanarFeatureArray list_left_lm_;
+				std::vector<int> indices_remained_lm_;
+				std::vector<int> indices_removed_lm_;
 				Eigen::VectorXd X_;
 				Eigen::MatrixXd P_;
 				int size_robot_state_;
@@ -81,6 +84,7 @@ class PlanarLandmarkEKF{
 				RemoveUnavailableLM(planar_landmark_ekf_slam::PlanarFeatureArray list_lm, const Eigen::VectorXd X, const Eigen::MatrixXd P, int size_robot_state, int size_lm_state);
 				void Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
 				void Recover(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
+				bool JudgeGeometricConstraints_(planar_landmark_ekf_slam::PlanarFeature lm);
 				bool CheckNormalIsInward_(const Eigen::Vector3d& Ng);
 		};
 	public:
@@ -94,11 +98,12 @@ class PlanarLandmarkEKF{
 		void CallbackFeatures(const planar_landmark_ekf_slam::PlanarFeatureArrayConstPtr &msg);
 		void DataSyncBeforeAssoc(void);
 		void DataAssociation(void);
-		bool Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
+		bool JudgeGeometricConstraints(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
 		void MergeLM(int parent_id, int child_id);
-		void UpdateFeatures(void);
+		void UpdateFeatures(planar_landmark_ekf_slam::PlanarFeatureArray& list_new_lm);
 		void UpdateLMInfo(int lm_id);
 		bool Innovation(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs, Eigen::Vector3d& Z, Eigen::VectorXd& H, Eigen::MatrixXd& jH, Eigen::VectorXd& Y, Eigen::MatrixXd& S);
+		void RegistrationNewLM(planar_landmark_ekf_slam::PlanarFeatureArray list_new_lm);
 		void DataSyncAfterAssoc(void);
 		void PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm);
 		void EraseLM(int index);
@@ -180,12 +185,12 @@ void PlanarLandmarkEKF::CallbackIMU(const sensor_msgs::ImuConstPtr& msg)
 	if(first_callback_imu)	dt = 0.0;
 	else if(inipose_is_available){
 		PlanarLandmarkEKF::RemoveUnavailableLM remover(list_lm, X, P, size_robot_state, size_lm_state);
-		remover.Remove(list_lm, X, P);
+		if(mode_remove_unavailable_lm)	remover.Remove(list_lm, X, P);
 
 		/*angular velocity*/
 		PredictionIMU(*msg, dt);
 
-		remover.Recover(list_lm, X, P);
+		if(mode_remove_unavailable_lm)	remover.Recover(list_lm, X, P);
 	}
 	
 	Publication();
@@ -279,7 +284,14 @@ void PlanarLandmarkEKF::CallbackOdom(const nav_msgs::OdometryConstPtr& msg)
 	}
 	time_odom_last = time_odom_now;
 	if(first_callback_odom)	dt = 0.0;
-	else if(inipose_is_available)	PredictionOdom(*msg, dt);
+	else if(inipose_is_available){
+		PlanarLandmarkEKF::RemoveUnavailableLM remover(list_lm, X, P, size_robot_state, size_lm_state);
+		if(mode_remove_unavailable_lm)	remover.Remove(list_lm, X, P);
+
+		PredictionOdom(*msg, dt);
+
+		if(mode_remove_unavailable_lm)	remover.Recover(list_lm, X, P);
+	}
 	
 	Publication();
 
@@ -356,13 +368,19 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	list_obs = *msg;
 	DataSyncBeforeAssoc();
 	std::cout << "DataSyncBeforeAssoc point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
+	/*remove*/
+	PlanarLandmarkEKF::RemoveUnavailableLM remover(list_lm, X, P, size_robot_state, size_lm_state);
+	if(mode_remove_unavailable_lm)	remover.Remove(list_lm, X, P);
 	/*data association*/
 	DataAssociation();
 	std::cout << "DataAssociation point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*observation uodate*/
-	UpdateFeatures();
+	planar_landmark_ekf_slam::PlanarFeatureArray list_new_lm;
+	UpdateFeatures(list_new_lm);
+	if(mode_remove_unavailable_lm)	remover.Recover(list_lm, X, P);
+	RegistrationNewLM(list_new_lm);
 	std::cout << "UpdateFeatures point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
-	/*Data Synchronization*/
+	/*data synchronization*/
 	DataSyncAfterAssoc();
 	std::cout << "DataSyncAfterAssoc point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*erase*/
@@ -452,10 +470,12 @@ void PlanarLandmarkEKF::DataSyncBeforeAssoc(void)
 		list_obs.features[i].counter_nomatch = 0;
 		list_obs.features[i].was_merged = false;
 		list_obs.features[i].was_erased = false;
+		// list_obs.features[i].observable = true;
 	}
 	/*landmarks*/
 	for(int i=0;i<list_lm.features.size();++i){
 		list_lm.features[i].was_observed_in_this_scan = false;
+		list_lm.features[i].observable = true;
 	}
 }
 
@@ -477,7 +497,7 @@ void PlanarLandmarkEKF::DataAssociation(void)
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			bool flag_break = true;
 			int obs_id = neighbor_obs_id[j];
-			if(Judge(list_lm.features[i], list_obs.features[obs_id])){
+			if(JudgeGeometricConstraints(list_lm.features[i], list_obs.features[obs_id])){
 				list_lm.features[i].corr_id = obs_id;
 				list_lm.features[i].corr_dist = sqrt(neighbor_obs_sqrdist[j]);
 				if(list_obs.features[obs_id].corr_id == -1)	list_obs.features[obs_id].corr_id = i;
@@ -499,7 +519,7 @@ void PlanarLandmarkEKF::DataAssociation(void)
 	}
 }
 
-bool PlanarLandmarkEKF::Judge(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs)
+bool PlanarLandmarkEKF::JudgeGeometricConstraints(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs)
 {
 	/*judge in normal direction*/
 	if(obs.normal_is_inward != lm.normal_is_inward)	return false;
@@ -598,7 +618,7 @@ void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
 	list_lm.features[parent_id].counter_nomatch += list_lm.features[child_id].counter_nomatch;
 }
 
-void PlanarLandmarkEKF::UpdateFeatures(void)
+void PlanarLandmarkEKF::UpdateFeatures(planar_landmark_ekf_slam::PlanarFeatureArray& list_new_lm)
 {
 	std::cout << "Update features" << std::endl;
 
@@ -610,14 +630,15 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	Eigen::VectorXd Diag_sigma(0);
 	for(size_t i=0;i<list_obs.features.size();++i){
 		if(list_obs.features[i].corr_id == -1){	//new landmark
-			list_lm.features.push_back(list_obs.features[i]);
-			/*stack*/
-			Eigen::Vector3d Obs(
-				list_obs.features[i].point_global.x,
-				list_obs.features[i].point_global.y,
-				list_obs.features[i].point_global.z
-			);
-			VectorVStack(Xnew, Obs);
+			list_new_lm.features.push_back(list_obs.features[i]);
+			/* list_lm.features.push_back(list_obs.features[i]); */
+			/* #<{(|stack|)}># */
+			/* Eigen::Vector3d Obs( */
+			/* 	list_obs.features[i].point_global.x, */
+			/* 	list_obs.features[i].point_global.y, */
+			/* 	list_obs.features[i].point_global.z */
+			/* ); */
+			/* VectorVStack(Xnew, Obs); */
 		}
 		else{	//associated observation
 			int lm_id = list_obs.features[i].corr_id;
@@ -641,13 +662,14 @@ void PlanarLandmarkEKF::UpdateFeatures(void)
 	}
 	/*update*/
 	if(Zstacked.size()>0 && inipose_is_available)   UpdateComputation(Zstacked, Hstacked, jHstacked, Diag_sigma);
-	/*new registration*/
-	X.conservativeResize(X.size() + Xnew.size());
-	X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew;
-	Eigen::MatrixXd Ptmp = P;
-	const double initial_lm_sigma = 0.001;
-	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
-	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
+
+	/* #<{(|new registration|)}># */
+	/* X.conservativeResize(X.size() + Xnew.size()); */
+	/* X.segment(X.size() - Xnew.size(), Xnew.size()) = Xnew; */
+	/* Eigen::MatrixXd Ptmp = P; */
+	/* const double initial_lm_sigma = 0.001; */
+	/* P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size()); */
+	/* P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp; */
 }
 
 void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
@@ -718,6 +740,25 @@ bool PlanarLandmarkEKF::Innovation(planar_landmark_ekf_slam::PlanarFeature lm, p
 	/*Y, S*/
 	Y = Z - H;
 	S = jH*P*jH.transpose() + R;
+}
+
+void PlanarLandmarkEKF::RegistrationNewLM(planar_landmark_ekf_slam::PlanarFeatureArray list_new_lm)
+{
+	for(size_t i=0;i<list_new_lm.features.size();++i){
+		list_lm.features.push_back(list_new_lm.features[i]);
+		/*X*/
+		Eigen::Vector3d Xnew(
+			list_new_lm.features[i].point_global.x,
+			list_new_lm.features[i].point_global.y,
+			list_new_lm.features[i].point_global.z
+		);
+		VectorVStack(X, Xnew);
+	}
+	/*P*/
+	Eigen::MatrixXd Ptmp = P;
+	const double initial_lm_sigma = 0.001;
+	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
+	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
 }
 
 void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
@@ -858,9 +899,9 @@ bool PlanarLandmarkEKF::CheckNormalIsInward(const Eigen::Vector3d& Ng)
 	double dot = VerticalPosition.dot(Ng);
 	if(dot<0)	return true;
 	else{
-		double dist_wall = Ng.norm();
+		double dist_lm = Ng.norm();
 		double dist_robot = VerticalPosition.norm();
-		if(dist_robot<dist_wall)	return true;
+		if(dist_robot < dist_lm)	return true;
 		else	return false;
 	}
 }
@@ -1002,6 +1043,12 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.b = 1.0;
 		tmp.color.a = 0.4;
 	}
+	else if(lm.observable){
+		tmp.color.r = 0.0;
+		tmp.color.g = 1.0;
+		tmp.color.b = 0.0;
+		tmp.color.a = 0.9;
+	}
 	else{
 		tmp.color.r = 0.0;
 		tmp.color.g = 0.0;
@@ -1100,44 +1147,17 @@ PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(planar_landmark_ekf_
 	P_ = P;
 	size_robot_state_ = size_robot_state;
 	size_lm_state_ = size_lm_state;
+	std::cout << "list_lm_.features.size() = " << list_lm_.features.size() << std::endl;
 }
 void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
 {
 	std::cout << "Remove" << std::endl;
 
-	const double max_observation_range = 10.0;
 	for(size_t i=0;i<list_lm.features.size();){
-		Eigen::Vector3d Ng(
-			list_lm.features[i].point_global.x,
-			list_lm.features[i].point_global.y,
-			list_lm.features[i].point_global.z
-		);
-		/*judge in direction of normal*/
-		if(list_lm.features[i].normal_is_inward == CheckNormalIsInward_(Ng)){
-			list_left_lm_.features.push_back(list_lm.features[i]);
+		/*judge*/
+		if(JudgeGeometricConstraints_(list_lm.features[i])){
+			indices_remained_lm_.push_back(list_lm.features[i].id);
 			i++;
-			std::cout << "pass: direction" << std::endl;
-			continue;
-		}
-		/*judge in observation range*/
-		Eigen::Vector3d LocalOrigin(
-			list_lm.features[i].centroid.x - X(0),
-			list_lm.features[i].centroid.y - X(1),
-			list_lm.features[i].centroid.z - X(2)
-		);
-		LocalOrigin = LocalOrigin.cwiseAbs();
-		Eigen::Vector3d MinMax(
-			(list_lm.features[i].max_global.x - list_lm.features[i].min_global.x)/2.0,
-			(list_lm.features[i].max_global.y - list_lm.features[i].min_global.y)/2.0,
-			(list_lm.features[i].max_global.z - list_lm.features[i].min_global.z)/2.0
-		);
-		if(LocalOrigin(0) < MinMax(0)+max_observation_range
-			|| LocalOrigin(1) < MinMax(1)+max_observation_range
-			|| LocalOrigin(2) < MinMax(2)+max_observation_range
-		){
-			list_left_lm_.features.push_back(list_lm.features[i]);
-			i++;
-			std::cout << "pass: range" << std::endl;
 			continue;
 		}
 		/*remove*/
@@ -1158,15 +1178,17 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 		/*P-lower-right*/
 		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = P_.block(delimit1, delimit1, P_.rows()-delimit1, P_.cols()-delimit1);
 		/*lm list*/
-		list_removed_lm_.features.push_back(list_lm.features[i]);
+		// list_lm.features[i].observable = false;
+		indices_removed_lm_.push_back(list_lm.features[i].id);
 		list_lm.features.erase(list_lm.features.begin() + i);
 		for(size_t j=0;j<list_lm.features.size();++j){
 			list_lm.features[j].list_lm_observed_simul.erase(list_lm.features[j].list_lm_observed_simul.begin() + i);
-			list_lm.features[j].id = j;
+			// list_lm.features[j].id = j;
 		}
 	}
-	std::cout << "list_removed_lm_.features.size()" << list_removed_lm_.features.size() << std::endl;
-	std::cout << "list_left_lm_.features.size()" << list_left_lm_.features.size() << std::endl;
+	for(size_t i=0;i<list_lm.features.size();++i)	list_lm.features[i].id = i;
+	std::cout << "indices_removed_lm_.size() = " << indices_removed_lm_.size() << std::endl;
+	std::cout << "indices_remained_lm_.size() = " << indices_remained_lm_.size() << std::endl;
 }
 void PlanarLandmarkEKF::RemoveUnavailableLM::Recover(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
 {
@@ -1176,11 +1198,11 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Recover(planar_landmark_ekf_slam::P
 	X_.segment(0, size_robot_state_) = X.segment(0, size_robot_state_);
 	P_.block(0, 0, size_robot_state_, size_robot_state_) = P.block(0, 0, size_robot_state_, size_robot_state_);
 	/*LM state*/
-	for(size_t i=0;i<list_left_lm_.features.size();++i){
-		X_.segment(size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_, size_lm_state_) = X.segment(size_robot_state_ + i*size_lm_state_, size_lm_state_);
+	for(size_t i=0;i<indices_remained_lm_.size();++i){
+		X_.segment(size_robot_state_ + indices_remained_lm_[i]*size_lm_state_, size_lm_state_) = X.segment(size_robot_state_ + i*size_lm_state_, size_lm_state_);
 		/*P-row-left*/
 		P_.block(
-			size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_,
+			size_robot_state_ + indices_remained_lm_[i]*size_lm_state_,
 			0,
 			size_lm_state_,
 			size_robot_state_
@@ -1188,15 +1210,15 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Recover(planar_landmark_ekf_slam::P
 		/*P-col-upper*/
 		P_.block(
 			0,
-			size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_,
+			size_robot_state_ + indices_remained_lm_[i]*size_lm_state_,
 			size_robot_state_,
 			size_lm_state_
 		) = P.block(0, size_robot_state_ + i*size_lm_state_, size_robot_state_, size_lm_state_);
 		/*p-inside*/
-		for(size_t j=0;j<list_left_lm_.features.size();j++){
+		for(size_t j=0;j<indices_remained_lm_.size();j++){
 			P_.block(
-				size_robot_state_ + list_left_lm_.features[i].id*size_lm_state_,
-				size_robot_state_ + list_left_lm_.features[j].id*size_lm_state_,
+				size_robot_state_ + indices_remained_lm_[i]*size_lm_state_,
+				size_robot_state_ + indices_remained_lm_[j]*size_lm_state_,
 				size_lm_state_,
 				size_lm_state_
 			) = P.block(size_robot_state_ + i*size_lm_state_, size_robot_state_ + j*size_lm_state_, size_lm_state_, size_lm_state_);
@@ -1205,11 +1227,44 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Recover(planar_landmark_ekf_slam::P
 	X = X_;
 	P = P_;
 	/*lm list*/
-	for(size_t i=0;i<list_removed_lm_.features.size();i++)	list_lm.features.insert(list_lm.features.begin() + list_removed_lm_.features[i].id, list_removed_lm_.features[i]);
+	for(size_t i=0;i<indices_removed_lm_.size();++i){
+		list_lm_.features[indices_removed_lm_[i]].observable = false;
+		list_lm.features.insert(list_lm.features.begin() + indices_removed_lm_[i], list_lm_.features[indices_removed_lm_[i]]);
+	}
 	for(size_t i=0;i<list_lm.features.size();++i){
 		list_lm.features[i].id = i;
 		list_lm.features[i].list_lm_observed_simul = list_lm_.features[i].list_lm_observed_simul;
 	}
+	std::cout << "list_lm.features.size() = " << list_lm.features.size() << std::endl;
+}
+bool PlanarLandmarkEKF::RemoveUnavailableLM::JudgeGeometricConstraints_(planar_landmark_ekf_slam::PlanarFeature lm)
+{
+	/*judge in direction of normal*/
+	Eigen::Vector3d Ng(
+		lm.point_global.x,
+		lm.point_global.y,
+		lm.point_global.z
+	);
+	if(lm.normal_is_inward != CheckNormalIsInward_(Ng))	return false;
+	/*judge in observation range*/
+	const double max_observation_range = 10.0;
+	Eigen::Vector3d LocalOrigin(
+		lm.centroid.x - X_(0),
+		lm.centroid.y - X_(1),
+		lm.centroid.z - X_(2)
+	);
+	LocalOrigin = LocalOrigin.cwiseAbs();
+	Eigen::Vector3d MinMax(
+		(lm.max_global.x - lm.min_global.x)/2.0,
+		(lm.max_global.y - lm.min_global.y)/2.0,
+		(lm.max_global.z - lm.min_global.z)/2.0
+	);
+	if(LocalOrigin(0) > MinMax(0)+max_observation_range
+		|| LocalOrigin(1) > MinMax(1)+max_observation_range
+		|| LocalOrigin(2) > MinMax(2)+max_observation_range
+	)	return false;
+	/*pass*/
+	return true;
 }
 bool PlanarLandmarkEKF::RemoveUnavailableLM::CheckNormalIsInward_(const Eigen::Vector3d& Ng)
 {
@@ -1217,9 +1272,9 @@ bool PlanarLandmarkEKF::RemoveUnavailableLM::CheckNormalIsInward_(const Eigen::V
 	double dot = VerticalPosition.dot(Ng);
 	if(dot<0)	return true;
 	else{
-		double dist_wall = Ng.norm();
+		double dist_lm = Ng.norm();
 		double dist_robot = VerticalPosition.norm();
-		if(dist_robot<dist_wall)	return true;
+		if(dist_robot < dist_lm)	return true;
 		else	return false;
 	}
 }
