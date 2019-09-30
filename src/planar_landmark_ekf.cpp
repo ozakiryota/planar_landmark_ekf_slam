@@ -179,8 +179,13 @@ void PlanarLandmarkEKF::CallbackIMU(const sensor_msgs::ImuConstPtr& msg)
 	time_imu_last = time_imu_now;
 	if(first_callback_imu)	dt = 0.0;
 	else if(inipose_is_available){
+		PlanarLandmarkEKF::RemoveUnavailableLM remover(list_lm, X, P, size_robot_state, size_lm_state);
+		remover.Remove(list_lm, X, P);
+
 		/*angular velocity*/
 		PredictionIMU(*msg, dt);
+
+		remover.Recover(list_lm, X, P);
 	}
 	
 	Publication();
@@ -1088,6 +1093,8 @@ double PlanarLandmarkEKF::PiToPi(double angle)
 
 PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(planar_landmark_ekf_slam::PlanarFeatureArray list_lm, const Eigen::VectorXd X, const Eigen::MatrixXd P, int size_robot_state, int size_lm_state)
 {
+	std::cout << "RemoveUnavailableLM" << std::endl;
+
 	list_lm_ = list_lm;
 	X_ = X;
 	P_ = P;
@@ -1096,37 +1103,41 @@ PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(planar_landmark_ekf_
 }
 void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
 {
+	std::cout << "Remove" << std::endl;
+
 	const double max_observation_range = 10.0;
 	for(size_t i=0;i<list_lm.features.size();){
 		Eigen::Vector3d Ng(
-			list_lm_.features[i].point_global.x,
-			list_lm_.features[i].point_global.y,
-			list_lm_.features[i].point_global.z
+			list_lm.features[i].point_global.x,
+			list_lm.features[i].point_global.y,
+			list_lm.features[i].point_global.z
 		);
 		/*judge in direction of normal*/
-		if(list_lm_.features[i].normal_is_inward == CheckNormalIsInward_(Ng)){
+		if(list_lm.features[i].normal_is_inward == CheckNormalIsInward_(Ng)){
+			list_left_lm_.features.push_back(list_lm.features[i]);
 			i++;
-			list_left_lm_.features.push_back(list_lm_.features[i]);
+			std::cout << "pass: direction" << std::endl;
 			continue;
 		}
 		/*judge in observation range*/
 		Eigen::Vector3d LocalOrigin(
-			list_lm_.features[i].centroid.x - X(0),
-			list_lm_.features[i].centroid.y - X(1),
-			list_lm_.features[i].centroid.z - X(2)
+			list_lm.features[i].centroid.x - X(0),
+			list_lm.features[i].centroid.y - X(1),
+			list_lm.features[i].centroid.z - X(2)
 		);
 		LocalOrigin = LocalOrigin.cwiseAbs();
 		Eigen::Vector3d MinMax(
-			(list_lm_.features[i].max_global.x - list_lm_.features[i].min_global.x)/2.0,
-			(list_lm_.features[i].max_global.y - list_lm_.features[i].min_global.y)/2.0,
-			(list_lm_.features[i].max_global.z - list_lm_.features[i].min_global.z)/2.0
+			(list_lm.features[i].max_global.x - list_lm.features[i].min_global.x)/2.0,
+			(list_lm.features[i].max_global.y - list_lm.features[i].min_global.y)/2.0,
+			(list_lm.features[i].max_global.z - list_lm.features[i].min_global.z)/2.0
 		);
 		if(LocalOrigin(0) < MinMax(0)+max_observation_range
 			|| LocalOrigin(1) < MinMax(1)+max_observation_range
 			|| LocalOrigin(2) < MinMax(2)+max_observation_range
 		){
+			list_left_lm_.features.push_back(list_lm.features[i]);
 			i++;
-			list_left_lm_.features.push_back(list_lm_.features[i]);
+			std::cout << "pass: range" << std::endl;
 			continue;
 		}
 		/*remove*/
@@ -1147,16 +1158,20 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 		/*P-lower-right*/
 		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = P_.block(delimit1, delimit1, P_.rows()-delimit1, P_.cols()-delimit1);
 		/*lm list*/
-		list_removed_lm_.features.push_back(list_lm_.features[i]);
+		list_removed_lm_.features.push_back(list_lm.features[i]);
 		list_lm.features.erase(list_lm.features.begin() + i);
 		for(size_t j=0;j<list_lm.features.size();++j){
 			list_lm.features[j].list_lm_observed_simul.erase(list_lm.features[j].list_lm_observed_simul.begin() + i);
 			list_lm.features[j].id = j;
 		}
 	}
+	std::cout << "list_removed_lm_.features.size()" << list_removed_lm_.features.size() << std::endl;
+	std::cout << "list_left_lm_.features.size()" << list_left_lm_.features.size() << std::endl;
 }
 void PlanarLandmarkEKF::RemoveUnavailableLM::Recover(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
 {
+	std::cout << "Recover" << std::endl;
+
 	/*robot state*/
 	X_.segment(0, size_robot_state_) = X.segment(0, size_robot_state_);
 	P_.block(0, 0, size_robot_state_, size_robot_state_) = P.block(0, 0, size_robot_state_, size_robot_state_);
