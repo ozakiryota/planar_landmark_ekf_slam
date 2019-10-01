@@ -245,7 +245,8 @@ Eigen::Vector4d PlanarFeatureExtraction::ComputeAverageNormal(pcl::PointIndices 
 		);
 		Ave += N;
 	}
-	Ave /= (double)indices.indices.size();
+	/* Ave /= (double)indices.indices.size(); */
+	Ave /= (float)indices.indices.size();
 
 	return Ave;
 }
