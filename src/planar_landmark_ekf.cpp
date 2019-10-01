@@ -488,7 +488,12 @@ void PlanarLandmarkEKF::DataAssociation(void)
 		/*kdtree search*/
 		std::vector<int> neighbor_obs_id;
 		std::vector<float> neighbor_obs_sqrdist;
-		kdtree.radiusSearch(landmarks_local->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
+		pcl::PointXYZ search_point;
+		search_point.x = list_lm.features[i].point_local.x;
+		search_point.y = list_lm.features[i].point_local.y;
+		search_point.z = list_lm.features[i].point_local.z;
+		kdtree.radiusSearch(search_point, threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
+		// kdtree.radiusSearch(landmarks_local->points[i], threshold_corr_dist, neighbor_obs_id, neighbor_obs_sqrdist);
 		for(size_t j=0;j<neighbor_obs_id.size();++j){
 			std::cout << "lm_id = " << i << ", obs_id = " << neighbor_obs_id[j] << ": " << neighbor_obs_sqrdist[j] << std::endl;
 		}
@@ -1153,6 +1158,12 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 {
 	std::cout << "Remove" << std::endl;
 
+	/* for(size_t i=0;i<list_lm.features.size();++i){ */
+	/* 	std::cout << list_lm.features[i].id; */
+	/* 	if(i==list_lm.features.size()-1)	std::cout << std::endl; */
+	/* 	else	std::cout << ", "; */
+    /*  */
+	/* } */
 	for(size_t i=0;i<list_lm.features.size();){
 		/*judge*/
 		if(JudgeGeometricConstraints_(list_lm.features[i])){
@@ -1164,19 +1175,21 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 		int delimit0 = size_robot_state_ + i*size_lm_state_;
 		int delimit1 = size_robot_state_ + (i+1)*size_lm_state_;
 		/*X*/
-		X.resize(X_.size() - size_lm_state_);
-		X.segment(0, delimit0) = X_.segment(0, delimit0);
-		X.segment(delimit0, X.size() - delimit0) = X_.segment(delimit1, X_.size() - delimit1);
+		Eigen::VectorXd tmp_X = X;
+		X.resize(tmp_X.size() - size_lm_state_);
+		X.segment(0, delimit0) = tmp_X.segment(0, delimit0);
+		X.segment(delimit0, X.size() - delimit0) = tmp_X.segment(delimit1, tmp_X.size() - delimit1);
 		/*P*/
-		P.resize(P_.cols() - size_lm_state_, P_.rows() - size_lm_state_);
+		Eigen::MatrixXd tmp_P = P;
+		P.resize(tmp_P.cols() - size_lm_state_, tmp_P.rows() - size_lm_state_);
 		/*P-upper-left*/
-		P.block(0, 0, delimit0, delimit0) = P_.block(0, 0, delimit0, delimit0);
+		P.block(0, 0, delimit0, delimit0) = tmp_P.block(0, 0, delimit0, delimit0);
 		/*P-upper-right*/
-		P.block(0, delimit0, delimit0, P.cols()-delimit0) = P_.block(0, delimit1, delimit0, P_.cols()-delimit1);
+		P.block(0, delimit0, delimit0, P.cols()-delimit0) = tmp_P.block(0, delimit1, delimit0, tmp_P.cols()-delimit1);
 		/*P-lower-left*/
-		P.block(delimit0, 0, P.rows()-delimit0, delimit0) = P_.block(delimit1, 0, P_.rows()-delimit1, delimit0);
+		P.block(delimit0, 0, P.rows()-delimit0, delimit0) = tmp_P.block(delimit1, 0, tmp_P.rows()-delimit1, delimit0);
 		/*P-lower-right*/
-		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = P_.block(delimit1, delimit1, P_.rows()-delimit1, P_.cols()-delimit1);
+		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = tmp_P.block(delimit1, delimit1, tmp_P.rows()-delimit1, tmp_P.cols()-delimit1);
 		/*lm list*/
 		// list_lm.features[i].observable = false;
 		indices_removed_lm_.push_back(list_lm.features[i].id);
