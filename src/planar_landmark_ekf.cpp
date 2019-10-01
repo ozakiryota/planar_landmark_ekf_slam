@@ -1060,6 +1060,7 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.b = 1.0;
 		tmp.color.a = 0.9;
 	}
+	if(fabs(lm.origin.orientation.x)>0.5 || fabs(lm.origin.orientation.y)>0.5)	tmp.color.a = 0.2;	//floor
 
 	/*test*/
 	const int highlighted_lm = 13;
