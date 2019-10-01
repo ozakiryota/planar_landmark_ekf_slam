@@ -117,9 +117,9 @@ void PlanarFeatureExtraction::Clustering(void)
 		/* pcl::compute3DCentroid(*normals, cluster_indices[i], centroid); */
 		/*input*/
 		planar_landmark_ekf_slam::PlanarFeature tmp_feature;
-		tmp_feature.point_local.x = -fabs(AveNormal(3))*AveNormal(0);
-		tmp_feature.point_local.y = -fabs(AveNormal(3))*AveNormal(1);
-		tmp_feature.point_local.z = -fabs(AveNormal(3))*AveNormal(2);
+		tmp_feature.point_local.x = -AveNormal(3)*AveNormal(0);
+		tmp_feature.point_local.y = -AveNormal(3)*AveNormal(1);
+		tmp_feature.point_local.z = -AveNormal(3)*AveNormal(2);
 		tmp_feature.min_local.x = Min[0];
 		tmp_feature.min_local.y = Min[1];
 		tmp_feature.min_local.z = Min[2];
@@ -133,15 +133,15 @@ void PlanarFeatureExtraction::Clustering(void)
 		tmp_normal.x = 0;
 		tmp_normal.y = 0;
 		tmp_normal.z = 0;
-		tmp_normal.data_n[0] = -fabs(AveNormal(3))*AveNormal(0);
-		tmp_normal.data_n[1] = -fabs(AveNormal(3))*AveNormal(1);
-		tmp_normal.data_n[2] = -fabs(AveNormal(3))*AveNormal(2);
+		tmp_normal.data_n[0] = -AveNormal(3)*AveNormal(0);
+		tmp_normal.data_n[1] = -AveNormal(3)*AveNormal(1);
+		tmp_normal.data_n[2] = -AveNormal(3)*AveNormal(2);
 		vis_features->points.push_back(tmp_normal);
 		/*input for visualization*/
 		pcl::PointXYZ tmp_point;
-		tmp_point.x = -fabs(AveNormal(3))*AveNormal(0);
-		tmp_point.y = -fabs(AveNormal(3))*AveNormal(1);
-		tmp_point.z = -fabs(AveNormal(3))*AveNormal(2);
+		tmp_point.x = -AveNormal(3)*AveNormal(0);
+		tmp_point.y = -AveNormal(3)*AveNormal(1);
+		tmp_point.z = -AveNormal(3)*AveNormal(2);
 		d_gaussian_sphere->points.push_back(tmp_point);
 		/*extraction for visualization*/
 		pcl::PointCloud<pcl::PointNormal>::Ptr tmp_cluster (new pcl::PointCloud<pcl::PointNormal>);
@@ -179,15 +179,14 @@ Eigen::Vector4d PlanarFeatureExtraction::ComputeAverageNormal(pcl::PointIndices 
 	Eigen::Vector4d Ave(0.0, 0.0, 0.0, 0.0);
 	for(size_t i=0;i<indices.indices.size();++i){
 		Eigen::Vector4d N(
-			normals->points[indices.indices[i]].data_n[0],
-			normals->points[indices.indices[i]].data_n[1],
-			normals->points[indices.indices[i]].data_n[2],
-			normals->points[indices.indices[i]].data_n[3]
+			normals->points[indices.indices[i]].normal_x,
+			normals->points[indices.indices[i]].normal_y,
+			normals->points[indices.indices[i]].normal_z,
+			fabs(normals->points[indices.indices[i]].data_n[3])
 		);
 		Ave += N;
 	}
-	/* Ave /= (double)indices.indices.size(); */
-	Ave /= (float)indices.indices.size();
+	Ave /= (double)indices.indices.size();
 
 	return Ave;
 }
