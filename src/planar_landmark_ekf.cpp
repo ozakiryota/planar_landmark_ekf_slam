@@ -140,7 +140,7 @@ PlanarLandmarkEKF::PlanarLandmarkEKF()
 	pub_variance = nh.advertise<std_msgs::Float64MultiArray>("variance", 1);
 	/*state*/
 	X = Eigen::VectorXd::Zero(size_robot_state);
-	const double initial_sigma = 1.0e-10;
+	const double initial_sigma = 1.0e-100;
 	P = initial_sigma*Eigen::MatrixXd::Identity(size_robot_state, size_robot_state);
 	/*parameters*/
 	nhPrivate.param("threshold_corr_dist", threshold_corr_dist, 0.1);
@@ -256,7 +256,7 @@ void PlanarLandmarkEKF::PredictionIMU(sensor_msgs::Imu imu, double dt)
 	jF.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Identity(num_wall*size_lm_state, num_wall*size_lm_state);
 	
 	/*Q*/
-	const double sigma = 1.0e-4;
+	const double sigma = 1.0e-5;
 	Eigen::MatrixXd Q = sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	Q.block(0, 0, 3, 3) = Eigen::MatrixXd::Zero(3, 3);
 	Q.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(num_wall*size_lm_state, num_wall*size_lm_state);
@@ -341,7 +341,7 @@ void PlanarLandmarkEKF::PredictionOdom(nav_msgs::Odometry odom, double dt)
 	jF.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Identity(num_wall*size_lm_state, num_wall*size_lm_state);
 
 	/*Q*/
-	const double sigma = 1.0e-4;
+	const double sigma = 1.0e-5;
 	Eigen::MatrixXd Q = sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	Q.block(3, 3, 3, 3) = Eigen::MatrixXd::Zero(3, 3);
 	Q.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(num_wall*size_lm_state, num_wall*size_lm_state);
@@ -538,31 +538,6 @@ bool PlanarLandmarkEKF::JudgeGeometricConstraints(planar_landmark_ekf_slam::Plan
 	/*judge in normal direction*/
 	if(obs.normal_is_inward != lm.normal_is_inward)	return false;
 	/*judge in position*/
-	/* Eigen::Vector3d ObsMin( */
-	/* 	obs.min_global.x, */
-	/* 	obs.min_global.y, */
-	/* 	obs.min_global.z */
-	/* ); */
-	/* Eigen::Vector3d ObsMax( */
-	/* 	obs.max_global.x, */
-	/* 	obs.max_global.y, */
-	/* 	obs.max_global.z */
-	/* ); */
-	/* Eigen::Vector3d LmMin( */
-	/* 	lm.min_global.x, */
-	/* 	lm.min_global.y, */
-	/* 	lm.min_global.z */
-	/* ); */
-	/* Eigen::Vector3d LmMax( */
-	/* 	lm.max_global.x, */
-	/* 	lm.max_global.y, */
-	/* 	lm.max_global.z */
-	/* ); */
-	/* Eigen::Vector3d ObsCent = ObsMin + (ObsMax - ObsMin)/2.0; */
-	/* Eigen::Vector3d LmCent = LmMin + (LmMax - LmMin)/2.0; */
-	/* Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs(); */
-	/* Eigen::Vector3d SumWidth = (ObsMax - ObsMin).cwiseAbs()/2.0 + (LmMax - LmMin).cwiseAbs()/2.0; */
-
 	Eigen::Vector3d ObsMin(
 		obs.min_global.x,
 		obs.min_global.y,
@@ -712,7 +687,8 @@ void PlanarLandmarkEKF::UpdateFeatures(planar_landmark_ekf_slam::PlanarFeatureAr
 			VectorVStack(Zstacked, Z);
 			VectorVStack(Hstacked, H);
 			MatrixVStack(jHstacked, jH);
-			double tmp_sigma = 0.1*1000/(double)list_obs.features[i].cluster_size;
+			/* double tmp_sigma = 0.1*1000/(double)list_obs.features[i].cluster_size; */
+			double tmp_sigma = (list_lm.features[lm_id].counter_nomatch+1)/(double)list_lm.features[lm_id].counter_match/(double)list_obs.features[i].cluster_size;
 			std::cout << "tmp_sigma = " << tmp_sigma << std::endl;
 			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 		}

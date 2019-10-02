@@ -15,8 +15,8 @@
 		<param name="initial_orientation_is_0001" type="bool" value="true"/>
 	</node>
 	<node pkg="planar_landmark_ekf_slam" name="planar_landmark_ekf" type="planar_landmark_ekf" output="screen">
-		<param name="threshold_corr_dist" type="double" value="0.1"/>
-		<param name="threshold_corr_position_diff" type="double" value="0.5"/>
+		<param name="threshold_corr_dist" type="double" value="0.15"/>
+		<param name="threshold_corr_position_diff" type="double" value="0.1"/>
 	</node>
 
 	<!-- comparisons -->
