@@ -604,7 +604,6 @@ bool PlanarLandmarkEKF::JudgeGeometricConstraints(planar_landmark_ekf_slam::Plan
 	std::cout << "Coincidence = (" << Coincidence(0) << ", " << Coincidence(1) << ", " << Coincidence(2) << ")" << std::endl;
 	std::cout << "SumWidth = (" << SumWidth(0) << ", " << SumWidth(1) << ", " << SumWidth(2) << ")" << std::endl;
 	std::cout << "CentDist = (" << CentDist(0) << ", " << CentDist(1) << ", " << CentDist(2) << ")" << std::endl;
-	/* std::cout << " = (" << (0) << ", " << (1) << ", " << (2) << ")" << std::endl; */
 	std::cout << "coincidence_score = " << coincidence_score << std::endl;
 	if(coincidence_score < 0.5)	return false;
 	/*pass*/
