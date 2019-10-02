@@ -597,6 +597,11 @@ bool PlanarLandmarkEKF::JudgeGeometricConstraints(planar_landmark_ekf_slam::Plan
 			return false;
 		}
 	}
+	/*judge in coincidence volume(Jaccard)*/
+	for(size_t i=0;i<SumWidth.size();++i)	SumWidth(i) += threshold_corr_position_diff;
+	Eigen::Vector3d L = SumWidth - CentDist;
+	double coincidence_score = L.norm()/( ((ObsMax - ObsMin)/2.0).norm() + ((LmMax - LmMin)/2.0).norm() - L.norm() );
+	if(coincidence_score < 0.5)	return false;
 	/*pass*/
 	return true;
 }
