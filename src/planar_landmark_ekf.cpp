@@ -688,7 +688,7 @@ void PlanarLandmarkEKF::UpdateFeatures(planar_landmark_ekf_slam::PlanarFeatureAr
 			VectorVStack(Hstacked, H);
 			MatrixVStack(jHstacked, jH);
 			/* double tmp_sigma = 0.1*1000/(double)list_obs.features[i].cluster_size; */
-			double tmp_sigma = (list_lm.features[lm_id].counter_nomatch+1)/(double)list_lm.features[lm_id].counter_match/(double)list_obs.features[i].cluster_size;
+			double tmp_sigma = 1.0e+8*(list_lm.features[lm_id].counter_nomatch+1)/(double)list_lm.features[lm_id].counter_match/(double)list_obs.features[i].cluster_size;
 			std::cout << "tmp_sigma = " << tmp_sigma << std::endl;
 			VectorVStack(Diag_sigma, Eigen::Vector3d(tmp_sigma, tmp_sigma, tmp_sigma));
 		}
