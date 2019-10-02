@@ -24,7 +24,7 @@ class PlanarNormalEstimation{
 		pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
 		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud {new pcl::PointCloud<pcl::PointXYZ>};
 		pcl::PointCloud<pcl::PointNormal>::Ptr normals {new pcl::PointCloud<pcl::PointNormal>};
-		pcl::PointCloud<pcl::PointNormal>::Ptr selected_noramls {new pcl::PointCloud<pcl::PointNormal>};
+		pcl::PointCloud<pcl::PointNormal>::Ptr selected_normals {new pcl::PointCloud<pcl::PointNormal>};
 		pcl::PointCloud<pcl::PointXYZ>::Ptr d_gaussian_sphere {new pcl::PointCloud<pcl::PointXYZ>};
 		pcl::PointCloud<pcl::PointXYZ>::Ptr selected_d_gaussian_sphere {new pcl::PointCloud<pcl::PointXYZ>};
 		/*objects*/
@@ -33,6 +33,8 @@ class PlanarNormalEstimation{
 		int skip;
 		double search_radius_ratio;
 		double min_search_radius;
+		/* double max_search_radius; */
+		int threshold_num_neighborpoints;
 		bool mode_remove_ground;
 		bool mode_open_viewer;
 		bool mode_selection;
@@ -65,12 +67,15 @@ PlanarNormalEstimation::PlanarNormalEstimation()
 	nhPrivate.param("skip", skip, 3);
 	nhPrivate.param("search_radius_ratio", search_radius_ratio, 0.09);
 	nhPrivate.param("min_search_radius", min_search_radius, 0.1);
+	/* nhPrivate.param("max_search_radius", max_search_radius, 2.0); */
+	nhPrivate.param("threshold_num_neighborpoints", threshold_num_neighborpoints, 10);
 	nhPrivate.param("mode_remove_ground", mode_remove_ground, false);
 	nhPrivate.param("mode_open_viewer", mode_open_viewer, true);
 	nhPrivate.param("mode_selection", mode_selection, true);
 	std::cout << "skip = " << skip << std::endl;
 	std::cout << "search_radius_ratio = " << search_radius_ratio << std::endl;
 	std::cout << "min_search_radius = " << min_search_radius << std::endl;
+	/* std::cout << "max_search_radius = " << max_search_radius << std::endl; */
 	std::cout << "mode_remove_ground = " << (bool)mode_remove_ground << std::endl;
 	std::cout << "mode_open_viewer = " << (bool)mode_open_viewer << std::endl;
 	std::cout << "mode_selection = " << (bool)mode_selection << std::endl;
@@ -97,7 +102,7 @@ void PlanarNormalEstimation::CallbackPC(const sensor_msgs::PointCloud2ConstPtr &
 void PlanarNormalEstimation::ClearPC(void)
 {
 	normals->points.clear();
-	selected_noramls->points.clear();
+	selected_normals->points.clear();
 	d_gaussian_sphere->points.clear();
 	selected_d_gaussian_sphere->points.clear();
 }
@@ -121,6 +126,7 @@ void PlanarNormalEstimation::Computation(void)
 		double laser_distance = Getdepth(cloud->points[i]);
 		double search_radius = search_radius_ratio*laser_distance;
 		if(search_radius<min_search_radius)	search_radius = min_search_radius;
+		// if(search_radius>max_search_radius)	search_radius = max_search_radius;
 		std::vector<int> indices = KdtreeSearch(cloud->points[i], search_radius);
 		/*compute normal*/
 		float curvature;
@@ -148,18 +154,19 @@ void PlanarNormalEstimation::Computation(void)
 		for(size_t i=0;i<extract_indices.size();i++){
 			if(extract_indices[i]){
 				/*selected normals*/
-				selected_noramls->points.push_back(normals->points[i]);
+				selected_normals->points.push_back(normals->points[i]);
 				/*selected d-gaussian shpere*/
 				selected_d_gaussian_sphere->points.push_back(d_gaussian_sphere->points[i]);
 			}
 		}
 	}
 	else{
-		selected_noramls = normals;
+		selected_normals = normals;
 		selected_d_gaussian_sphere = d_gaussian_sphere;
 	}
 
 	std::cout << "computation time [s] = " << ros::Time::now().toSec() - time_start << std::endl;
+	std::cout << "selected_normals->points.size() = " << selected_normals->points.size() << "(" << selected_normals->points.size()/(double)cloud->points.size()*100.0 << " %)" << std::endl;
 }
 
 double PlanarNormalEstimation::Getdepth(pcl::PointXYZ point)
@@ -183,7 +190,6 @@ std::vector<int> PlanarNormalEstimation::KdtreeSearch(pcl::PointXYZ searchpoint,
 bool PlanarNormalEstimation::JudgeForSelecting(const Eigen::Vector4f& plane_parameters, std::vector<int> indices)
 {
 	/*threshold*/
-	const size_t threshold_num_neighborpoints = 10;
 	const double threshold_angle = 30.0;	//[deg]
 	const double threshold_fitting_error = 0.01;	//[m]
 
@@ -235,9 +241,9 @@ void PlanarNormalEstimation::Visualization(void)
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "normals");
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 1, "normals");
 	/*selected normals*/
-	viewer.addPointCloudNormals<pcl::PointNormal>(selected_noramls, 1, 0.5, "selected_noramls");
-	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, "selected_noramls");
-	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 1, "selected_noramls");
+	viewer.addPointCloudNormals<pcl::PointNormal>(selected_normals, 1, 0.5, "selected_normals");
+	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, "selected_normals");
+	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 1, "selected_normals");
 	/*d-gaussian sphere*/
 	viewer.addPointCloud(d_gaussian_sphere, "d_gaussian_sphere");
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 0.0, "d_gaussian_sphere");
@@ -260,10 +266,10 @@ void PlanarNormalEstimation::Publication(void)
 	pub_nc.publish(nc_pub);	
 	/*nc*/
 	if(mode_selection){
-		selected_noramls->header.stamp = cloud->header.stamp;
-		selected_noramls->header.frame_id = cloud->header.frame_id;
+		selected_normals->header.stamp = cloud->header.stamp;
+		selected_normals->header.frame_id = cloud->header.frame_id;
 		sensor_msgs::PointCloud2 selected_nc_pub;
-		pcl::toROSMsg(*selected_noramls, selected_nc_pub);
+		pcl::toROSMsg(*selected_normals, selected_nc_pub);
 		pub_selected_nc.publish(selected_nc_pub);
 	}
 	/*gauss*/
