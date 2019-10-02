@@ -99,6 +99,7 @@ class PlanarLandmarkEKF{
 		void DataSyncBeforeAssoc(void);
 		void DataAssociation(void);
 		bool JudgeGeometricConstraints(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
+		double ComputeCoincidenceRatio(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs);
 		void MergeLM(int parent_id, int child_id);
 		void UpdateFeatures(planar_landmark_ekf_slam::PlanarFeatureArray& list_new_lm);
 		void UpdateLMInfo(int lm_id);
@@ -510,11 +511,19 @@ void PlanarLandmarkEKF::DataAssociation(void)
 					int tmp_corr_lm_id = list_obs.features[obs_id].corr_id;
 					if(list_lm.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
 						/*compare*/
-						if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
+						double coincidence_ratio_new = ComputeCoincidenceRatio(list_lm.features[i], list_obs.features[obs_id]);
+						double coincidence_ratio_last = ComputeCoincidenceRatio(list_lm.features[tmp_corr_lm_id], list_obs.features[obs_id]);
+						if(coincidence_ratio_new > coincidence_ratio_last)	list_obs.features[obs_id].corr_id = i;
 						else{
 							list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
 							flag_break = false;
 						}
+						// #<{(|compare|)}>#
+						// if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
+						// else{
+						// 	list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
+						// 	flag_break = false;
+						// }
 					}
 					else	MergeLM(tmp_corr_lm_id, i);
 				}
@@ -597,17 +606,51 @@ bool PlanarLandmarkEKF::JudgeGeometricConstraints(planar_landmark_ekf_slam::Plan
 			return false;
 		}
 	}
-	/*judge in coincidence volume(Jaccard)*/
-	const double threshhold_coincidence = 0.5;
+	/*pass*/
+	return true;
+}
+
+double PlanarLandmarkEKF::ComputeCoincidenceRatio(planar_landmark_ekf_slam::PlanarFeature lm, planar_landmark_ekf_slam::PlanarFeature obs)
+{
+	Eigen::Vector3d ObsMin(
+		obs.min_global.x,
+		obs.min_global.y,
+		obs.min_global.z
+	);
+	Eigen::Vector3d ObsMax(
+		obs.max_global.x,
+		obs.max_global.y,
+		obs.max_global.z
+	);
+	Eigen::Vector3d LmMin(
+		lm.min_global.x,
+		lm.min_global.y,
+		lm.min_global.z
+	);
+	Eigen::Vector3d LmMax(
+		lm.max_global.x,
+		lm.max_global.y,
+		lm.max_global.z
+	);
+	Eigen::Vector3d ObsCent(
+		obs.centroid.x,
+		obs.centroid.y,
+		obs.centroid.z
+	);
+	Eigen::Vector3d LmCent(
+		lm.centroid.x,
+		lm.centroid.y,
+		lm.centroid.z
+	);
+	Eigen::Vector3d SumWidth = (ObsMax - ObsMin)/2.0 + (LmMax - LmMin)/2.0;
+	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
 	Eigen::Vector3d Coincidence = SumWidth - CentDist;
-	double coincidence_score = Coincidence.norm()/( ((ObsMax - ObsMin)/1.0).norm() + ((LmMax - LmMin)/1.0).norm() - Coincidence.norm() );
+	double coincidence_ration = Coincidence.norm()/( ((ObsMax - ObsMin)/1.0).norm() + ((LmMax - LmMin)/1.0).norm() - Coincidence.norm() );
 	/* std::cout << "Coincidence = (" << Coincidence(0) << ", " << Coincidence(1) << ", " << Coincidence(2) << ")" << std::endl; */
 	/* std::cout << "SumWidth = (" << SumWidth(0) << ", " << SumWidth(1) << ", " << SumWidth(2) << ")" << std::endl; */
 	/* std::cout << "CentDist = (" << CentDist(0) << ", " << CentDist(1) << ", " << CentDist(2) << ")" << std::endl; */
-	/* std::cout << "coincidence_score = " << coincidence_score << std::endl; */
-	if(coincidence_score < threshhold_coincidence)	return false;
-	/*pass*/
-	return true;
+	/* std::cout << "coincidence_ration = " << coincidence_ration << std::endl; */
+	return coincidence_ration;
 }
 
 void PlanarLandmarkEKF::MergeLM(int parent_id, int child_id)
