@@ -598,7 +598,7 @@ bool PlanarLandmarkEKF::JudgeGeometricConstraints(planar_landmark_ekf_slam::Plan
 		}
 	}
 	/*judge in coincidence volume(Jaccard)*/
-	const double threshhold_coincidence = 0.3;
+	const double threshhold_coincidence = 0.5;
 	Eigen::Vector3d Coincidence = SumWidth - CentDist;
 	double coincidence_score = Coincidence.norm()/( ((ObsMax - ObsMin)/1.0).norm() + ((LmMax - LmMin)/1.0).norm() - Coincidence.norm() );
 	/* std::cout << "Coincidence = (" << Coincidence(0) << ", " << Coincidence(1) << ", " << Coincidence(2) << ")" << std::endl; */
