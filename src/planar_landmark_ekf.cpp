@@ -618,6 +618,7 @@ double PlanarLandmarkEKF::ComputeCoincidenceRatio(planar_landmark_ekf_slam::Plan
 		lm.centroid.z
 	);
 	Eigen::Vector3d SumWidth = (ObsMax - ObsMin)/2.0 + (LmMax - LmMin)/2.0;
+	for(size_t i=0;i<SumWidth.size();++i)   SumWidth(i) += threshold_corr_position_diff;
 	Eigen::Vector3d CentDist = (LmCent - ObsCent).cwiseAbs();
 	Eigen::Vector3d Coincidence = SumWidth - CentDist;
 	double coincidence_ration = Coincidence.norm()/( ((ObsMax - ObsMin)/1.0).norm() + ((LmMax - LmMin)/1.0).norm() - Coincidence.norm() );
