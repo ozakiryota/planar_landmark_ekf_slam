@@ -35,5 +35,8 @@
 		<remap from="/odom/from_posestamped" to="/ekf/odom"/>
 		<param name="child_frame_id" type="string" value="/ekf/odom"/>
 	</node>
-
+	<!-- for visualize trajectory -->
+	<node pkg="pc_store" name="downsampled_pc_srore_with_odometry_mapframe" type="downsampled_pc_srore_with_odometry_mapframe" output="screen">
+		<remap from="/odom" to="/ekf/odom"/>
+	</node>
 </launch>
