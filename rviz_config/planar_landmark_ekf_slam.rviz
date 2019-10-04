@@ -51,11 +51,21 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        aft_mapped:
+          Value: true
+        camera:
+          Value: true
+        camera_init:
+          Value: true
         gyrodometry:
           Value: true
         initial_orientation:
           Value: true
+        laser_odom:
+          Value: true
         odom:
+          Value: true
+        odom/change_axis:
           Value: true
         velodyne:
           Value: true
@@ -69,6 +79,8 @@ Visualization Manager:
           gyrodometry:
             {}
           initial_orientation:
+            {}
+          odom/change_axis:
             {}
           velodyne:
             {}
@@ -238,6 +250,16 @@ Visualization Manager:
       Position Tolerance: 0.5
       Topic: /gyrodometry
       Value: true
+    - Angle Tolerance: 1
+      Class: rviz/Odometry
+      Color: 0; 255; 255
+      Enabled: true
+      Keep: 10000
+      Length: 0.5
+      Name: Odometry
+      Position Tolerance: 0.5
+      Topic: /loam/odom
+      Value: true
     - Class: rviz/Image
       Enabled: true
       Image Topic: /usb_cam/image_raw
@@ -253,8 +275,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 2.92938137
-        Min Value: -4.33743763
+        Max Value: 4.88584805
+        Min Value: -4.3396554
         Value: true
       Axis: Z
       Channel Name: intensity
