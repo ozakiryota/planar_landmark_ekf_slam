@@ -43,7 +43,8 @@ class PlanarFeatureExtraction{
 		void Clustering(void);
 		double ComputeTolerance(const pcl::PointNormal& point);
 		bool CustomCondition(const pcl::PointNormal& seedPoint, const pcl::PointNormal& candidatePoint, float squaredDistance);
-		Eigen::Vector4d ComputeAverageNormal(pcl::PointIndices indices);
+		// Eigen::Vector4d ComputeAverageNormal_(pcl::PointIndices indices);
+		Eigen::Vector3d ComputeAverageNormal(const pcl::PointIndices& indices);
 		void Visualization(void);
 		void Publication(void);
 };
@@ -155,7 +156,8 @@ void PlanarFeatureExtraction::Clustering(void)
 		/* std::cout << i << ": Min = " << std::endl << Min << std::endl; */
 		/* std::cout << i << ": Max = " << std::endl << Max << std::endl; */
 		/*average normal*/
-		Eigen::Vector4d AveNormal = ComputeAverageNormal(cluster_indices[i]);
+		// Eigen::Vector4d AveNormal_ = ComputeAverageNormal_(cluster_indices[i]);
+		Eigen::Vector3d AveNormal = ComputeAverageNormal(cluster_indices[i]);
 		/* #<{(|compute centroid|)}># */
 		/* Eigen::Vector4f centroid; */
 		/* pcl::compute3DCentroid(*normals, cluster_indices[i], centroid); */
@@ -231,15 +233,30 @@ bool PlanarFeatureExtraction::CustomCondition(const pcl::PointNormal& seedPoint,
 	else	return false;
 }
 
-Eigen::Vector4d PlanarFeatureExtraction::ComputeAverageNormal(pcl::PointIndices indices)
+/* Eigen::Vector4d PlanarFeatureExtraction::ComputeAverageNormal_(pcl::PointIndices indices) */
+/* { */
+/* 	Eigen::Vector4d Ave(0.0, 0.0, 0.0, 0.0); */
+/* 	for(size_t i=0;i<indices.indices.size();++i){ */
+/* 		Eigen::Vector4d N( */
+/* 			normals->points[indices.indices[i]].normal_x, */
+/* 			normals->points[indices.indices[i]].normal_y, */
+/* 			normals->points[indices.indices[i]].normal_z, */
+/* 			fabs(normals->points[indices.indices[i]].data_n[3]) */
+/* 		); */
+/* 		Ave += N; */
+/* 	} */
+/* 	Ave /= (double)indices.indices.size(); */
+/*  */
+/* 	return Ave; */
+/* } */
+Eigen::Vector3d PlanarFeatureExtraction::ComputeAverageNormal(const pcl::PointIndices& indices)
 {
-	Eigen::Vector4d Ave(0.0, 0.0, 0.0, 0.0);
+	Eigen::Vector3d Ave(0.0, 0.0, 0.0);
 	for(size_t i=0;i<indices.indices.size();++i){
-		Eigen::Vector4d N(
-			normals->points[indices.indices[i]].normal_x,
-			normals->points[indices.indices[i]].normal_y,
-			normals->points[indices.indices[i]].normal_z,
-			fabs(normals->points[indices.indices[i]].data_n[3])
+		Eigen::Vector3d N(
+			fabs(normals->points[indices.indices[i]].data_n[3]) * normals->points[indices.indices[i]].normal_x,
+			fabs(normals->points[indices.indices[i]].data_n[3]) * normals->points[indices.indices[i]].normal_y,
+			fabs(normals->points[indices.indices[i]].data_n[3]) * normals->points[indices.indices[i]].normal_z
 		);
 		Ave += N;
 	}
