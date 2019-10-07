@@ -268,6 +268,7 @@ Eigen::Vector3d PlanarFeatureExtraction::ComputeAverageNormal(const pcl::PointIn
 			fabs(normals->points[indices.indices[i]].data_n[3]) * normals->points[indices.indices[i]].normal_z
 		);
 		Ave += N;
+		/* std::cout << "N" << i << ": (" << N(0) << ", " << N(1) << ", " << N(2) << std::endl; */
 	}
 	Ave /= (double)indices.indices.size();
 
