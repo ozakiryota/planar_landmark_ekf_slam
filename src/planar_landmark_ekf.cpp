@@ -82,6 +82,7 @@ class PlanarLandmarkEKF{
 				int size_lm_state_;
 			public:
 				RemoveUnavailableLM(planar_landmark_ekf_slam::PlanarFeatureArray list_lm, const Eigen::VectorXd X, const Eigen::MatrixXd P, int size_robot_state, int size_lm_state);
+				void RemoveWithCheck(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
 				void Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
 				void Recover(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P);
 				bool JudgeGeometricConstraints_(planar_landmark_ekf_slam::PlanarFeature lm);
@@ -371,7 +372,7 @@ void PlanarLandmarkEKF::CallbackFeatures(const planar_landmark_ekf_slam::PlanarF
 	std::cout << "DataSyncBeforeAssoc point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
 	/*remove*/
 	PlanarLandmarkEKF::RemoveUnavailableLM remover(list_lm, X, P, size_robot_state, size_lm_state);
-	if(mode_remove_unavailable_lm)	remover.Remove(list_lm, X, P);
+	if(mode_remove_unavailable_lm)	remover.RemoveWithCheck(list_lm, X, P);
 	/*data association*/
 	DataAssociation();
 	std::cout << "DataAssociation point [s] = " << ros::Time::now().toSec() - time_start << std::endl;
@@ -1187,7 +1188,7 @@ PlanarLandmarkEKF::RemoveUnavailableLM::RemoveUnavailableLM(planar_landmark_ekf_
 	size_lm_state_ = size_lm_state;
 	std::cout << "list_lm_.features.size() = " << list_lm_.features.size() << std::endl;
 }
-void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
+void PlanarLandmarkEKF::RemoveUnavailableLM::RemoveWithCheck(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
 {
 	std::cout << "Remove" << std::endl;
 
@@ -1200,6 +1201,55 @@ void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::Pl
 	for(size_t i=0;i<list_lm.features.size();){
 		/*judge*/
 		if(JudgeGeometricConstraints_(list_lm.features[i])){
+			indices_remained_lm_.push_back(list_lm.features[i].id);
+			i++;
+			continue;
+		}
+		/*remove*/
+		int delimit0 = size_robot_state_ + i*size_lm_state_;
+		int delimit1 = size_robot_state_ + (i+1)*size_lm_state_;
+		/*X*/
+		Eigen::VectorXd tmp_X = X;
+		X.resize(tmp_X.size() - size_lm_state_);
+		X.segment(0, delimit0) = tmp_X.segment(0, delimit0);
+		X.segment(delimit0, X.size() - delimit0) = tmp_X.segment(delimit1, tmp_X.size() - delimit1);
+		/*P*/
+		Eigen::MatrixXd tmp_P = P;
+		P.resize(tmp_P.cols() - size_lm_state_, tmp_P.rows() - size_lm_state_);
+		/*P-upper-left*/
+		P.block(0, 0, delimit0, delimit0) = tmp_P.block(0, 0, delimit0, delimit0);
+		/*P-upper-right*/
+		P.block(0, delimit0, delimit0, P.cols()-delimit0) = tmp_P.block(0, delimit1, delimit0, tmp_P.cols()-delimit1);
+		/*P-lower-left*/
+		P.block(delimit0, 0, P.rows()-delimit0, delimit0) = tmp_P.block(delimit1, 0, tmp_P.rows()-delimit1, delimit0);
+		/*P-lower-right*/
+		P.block(delimit0, delimit0, P.rows()-delimit0, P.cols()-delimit0) = tmp_P.block(delimit1, delimit1, tmp_P.rows()-delimit1, tmp_P.cols()-delimit1);
+		/*lm list*/
+		// list_lm.features[i].observable = false;
+		indices_removed_lm_.push_back(list_lm.features[i].id);
+		list_lm.features.erase(list_lm.features.begin() + i);
+		for(size_t j=0;j<list_lm.features.size();++j){
+			list_lm.features[j].list_lm_observed_simul.erase(list_lm.features[j].list_lm_observed_simul.begin() + i);
+			// list_lm.features[j].id = j;
+		}
+	}
+	for(size_t i=0;i<list_lm.features.size();++i)	list_lm.features[i].id = i;
+	std::cout << "indices_removed_lm_.size() = " << indices_removed_lm_.size() << std::endl;
+	std::cout << "indices_remained_lm_.size() = " << indices_remained_lm_.size() << std::endl;
+}
+void PlanarLandmarkEKF::RemoveUnavailableLM::Remove(planar_landmark_ekf_slam::PlanarFeatureArray& list_lm, Eigen::VectorXd& X, Eigen::MatrixXd& P)
+{
+	std::cout << "Remove" << std::endl;
+
+	/* for(size_t i=0;i<list_lm.features.size();++i){ */
+	/* 	std::cout << list_lm.features[i].id; */
+	/* 	if(i==list_lm.features.size()-1)	std::cout << std::endl; */
+	/* 	else	std::cout << ", "; */
+    /*  */
+	/* } */
+	for(size_t i=0;i<list_lm.features.size();){
+		/*judge*/
+		if(list_lm.features[i].observable){
 			indices_remained_lm_.push_back(list_lm.features[i].id);
 			i++;
 			continue;
