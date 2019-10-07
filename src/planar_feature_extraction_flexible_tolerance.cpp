@@ -163,9 +163,12 @@ void PlanarFeatureExtraction::Clustering(void)
 		/* pcl::compute3DCentroid(*normals, cluster_indices[i], centroid); */
 		/*input*/
 		planar_landmark_ekf_slam::PlanarFeature tmp_feature;
-		tmp_feature.point_local.x = -AveNormal(3)*AveNormal(0);
-		tmp_feature.point_local.y = -AveNormal(3)*AveNormal(1);
-		tmp_feature.point_local.z = -AveNormal(3)*AveNormal(2);
+		/* tmp_feature.point_local.x = -AveNormal_(3)*AveNormal_(0); */
+		/* tmp_feature.point_local.y = -AveNormal_(3)*AveNormal_(1); */
+		/* tmp_feature.point_local.z = -AveNormal_(3)*AveNormal_(2); */
+		tmp_feature.point_local.x = -AveNormal(0);
+		tmp_feature.point_local.y = -AveNormal(1);
+		tmp_feature.point_local.z = -AveNormal(2);
 		tmp_feature.min_local.x = Min[0];
 		tmp_feature.min_local.y = Min[1];
 		tmp_feature.min_local.z = Min[2];
@@ -179,15 +182,21 @@ void PlanarFeatureExtraction::Clustering(void)
 		tmp_normal.x = 0;
 		tmp_normal.y = 0;
 		tmp_normal.z = 0;
-		tmp_normal.data_n[0] = -AveNormal(3)*AveNormal(0);
-		tmp_normal.data_n[1] = -AveNormal(3)*AveNormal(1);
-		tmp_normal.data_n[2] = -AveNormal(3)*AveNormal(2);
+		/* tmp_normal.data_n[0] = -AveNormal_(3)*AveNormal_(0); */
+		/* tmp_normal.data_n[1] = -AveNormal_(3)*AveNormal_(1); */
+		/* tmp_normal.data_n[2] = -AveNormal_(3)*AveNormal_(2); */
+		tmp_normal.data_n[0] = -AveNormal(0);
+		tmp_normal.data_n[1] = -AveNormal(1);
+		tmp_normal.data_n[2] = -AveNormal(2);
 		features_n->points.push_back(tmp_normal);
 		/*input for visualization*/
 		pcl::PointXYZ tmp_point;
-		tmp_point.x = -AveNormal(3)*AveNormal(0);
-		tmp_point.y = -AveNormal(3)*AveNormal(1);
-		tmp_point.z = -AveNormal(3)*AveNormal(2);
+		/* tmp_point.x = -AveNormal_(3)*AveNormal_(0); */
+		/* tmp_point.y = -AveNormal_(3)*AveNormal_(1); */
+		/* tmp_point.z = -AveNormal_(3)*AveNormal_(2); */
+		tmp_point.x = -AveNormal(0);
+		tmp_point.y = -AveNormal(1);
+		tmp_point.z = -AveNormal(2);
 		features_p->points.push_back(tmp_point);
 		/*extraction for visualization*/
 		pcl::PointCloud<pcl::PointNormal>::Ptr tmp_cluster (new pcl::PointCloud<pcl::PointNormal>);
