@@ -30,8 +30,6 @@ class PlanarFeatureExtraction{
 		pcl::PointCloud<pcl::PointNormal>::Ptr features_n {new pcl::PointCloud<pcl::PointNormal>};
 		planar_landmark_ekf_slam::PlanarFeatureArray feature_array;
 		/*parameters*/
-		double cluster_tolerance;
-
 		double ratio_depth_tolerance;
 		double min_tolerance;
 		double max_tolerance;
