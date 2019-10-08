@@ -487,6 +487,7 @@ void PlanarLandmarkEKF::DataAssociation(void)
 	kdtree.setInputCloud(observation);
 	/* const double search_radius = 0.1; */
 	for(size_t i=0;i<list_lm.features.size();++i){
+		// if(list_lm.features[i].was_merged)	continue;	
 		/*kdtree search*/
 		std::vector<int> neighbor_obs_id;
 		std::vector<float> neighbor_obs_sqrdist;
