@@ -57,7 +57,7 @@ PlanarNormalEstimation::PlanarNormalEstimation()
 {
 	sub_pc = nh.subscribe("/velodyne_points", 1, &PlanarNormalEstimation::CallbackPC, this);
 	pub_nc = nh.advertise<sensor_msgs::PointCloud2>("/normals", 1);
-	pub_selected_nc = nh.advertise<sensor_msgs::PointCloud2>("/selected_normals", 1);
+	pub_selected_nc = nh.advertise<sensor_msgs::PointCloud2>("/normals/selected", 1);
 	pub_vis_gauss = nh.advertise<sensor_msgs::PointCloud2>("/selected_d_gaussian_sphere", 1);
 	viewer.setBackgroundColor(1, 1, 1);
 	viewer.addCoordinateSystem(1.0, "axis");

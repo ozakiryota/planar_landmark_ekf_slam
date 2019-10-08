@@ -27,13 +27,13 @@
 		<!-- <param name="mode_selection" type="bool" value="false"/> -->
 	</node>
 	<!-- <node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction"> -->
-	<!-- 	<remap from="/normals" to="/selected_normals"/> -->
+	<!-- 	<remap from="/normals" to="/normals/selected"/> -->
 	<!-- 	<param name="cluster_tolerance" type="double" value="0.1"/> -->
 	<!-- 	<!&#45;&#45; <param name="min_cluster_size" type="int" value="150"/> &#45;&#45;> -->
 	<!-- 	<param name="min_cluster_size" type="int" value="1000"/> -->
 	<!-- </node> -->
 	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction_flexible_tolerance" type="planar_feature_extraction_flexible_tolerance" output="screen">
-		<remap from="/normals" to="/selected_normals"/>
+		<remap from="/normals" to="/normals/selected"/>
 		<param name="ratio_depth_tolerance" type="double" value="0.09"/>
 		<param name="min_tolerance" type="double" value="0.1"/>
 		<param name="max_tolerance" type="double" value="0.5"/>

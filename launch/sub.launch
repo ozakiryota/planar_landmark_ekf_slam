@@ -22,7 +22,7 @@
 	<!-- 	<param name="min_cluster_size" type="int" value="1000"/> -->
 	<!-- </node> -->
 	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction_flexible_tolerance" type="planar_feature_extraction_flexible_tolerance" output="screen">
-		<remap from="/normals" to="/selected_normals"/>
+		<remap from="/normals" to="/normals/selected"/>
 		<param name="ratio_depth_tolerance" type="double" value="0.05"/>
 		<param name="min_tolerance" type="double" value="0.1"/>
 		<param name="max_tolerance" type="double" value="0.3"/>
