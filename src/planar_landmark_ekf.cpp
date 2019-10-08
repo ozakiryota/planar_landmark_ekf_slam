@@ -119,7 +119,7 @@ class PlanarLandmarkEKF{
 		Eigen::Matrix3d GetRotationXYZMatrix(const Eigen::Vector3d& RPY, bool inverse);
 		void VectorVStack(Eigen::VectorXd& A, const Eigen::VectorXd& B);
 		void MatrixVStack(Eigen::MatrixXd& A, const Eigen::MatrixXd& B);
-		geometry_msgs::Quaternion QuatEigenToMsg(Eigen::Quaterniond q_eigen);
+		geometry_msgs::Quaternion QuatEigenToMsg(const Eigen::Quaterniond& q_eigen);
 		double PiToPi(double angle);
 };
 
@@ -1163,7 +1163,7 @@ void PlanarLandmarkEKF::MatrixVStack(Eigen::MatrixXd& A, const Eigen::MatrixXd& 
 	A.block(A.rows() - B.rows(), 0, B.rows(), B.cols()) = B;
 }
 
-geometry_msgs::Quaternion PlanarLandmarkEKF::QuatEigenToMsg(Eigen::Quaterniond q_eigen)
+geometry_msgs::Quaternion PlanarLandmarkEKF::QuatEigenToMsg(const Eigen::Quaterniond& q_eigen)
 {
 	geometry_msgs::Quaternion q_msg;
 	q_msg.x = q_eigen.x();
