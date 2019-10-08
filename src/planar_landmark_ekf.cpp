@@ -837,7 +837,7 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 		list_lm.features[i].corr_id = -1;
 
 		/*match or no-match*/
-		const int threshold_counter_match = 100;
+		const int threshold_counter_match = 50;
 		const int threshold_counter_nomatch = 200;
 		list_lm.features[i].list_lm_observed_simul.resize(list_lm.features.size(), false);	//keeps valuses and inputs "false" into new memories
 		if(list_lm.features[i].was_observed_in_this_scan){

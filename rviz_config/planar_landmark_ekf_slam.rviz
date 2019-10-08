@@ -51,21 +51,11 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        aft_mapped:
-          Value: true
-        camera:
-          Value: true
-        camera_init:
-          Value: true
         gyrodometry:
           Value: true
         initial_orientation:
           Value: true
-        laser_odom:
-          Value: true
         odom:
-          Value: true
-        odom/change_axis:
           Value: true
         velodyne:
           Value: true
@@ -79,8 +69,6 @@ Visualization Manager:
           gyrodometry:
             {}
           initial_orientation:
-            {}
-          odom/change_axis:
             {}
           velodyne:
             {}
@@ -275,8 +263,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 4.88584805
-        Min Value: -4.3396554
+        Max Value: 2.0548532
+        Min Value: -1.82335162
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -297,7 +285,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.00999999978
       Style: Flat Squares
-      Topic: /velodyne_points/stored
+      Topic: /normals/stored
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
