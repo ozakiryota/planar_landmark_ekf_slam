@@ -40,4 +40,9 @@
 		<remap from="/odom" to="/ekf/odom"/>
 		<param name="leaf_size" type="double" value="0.5"/>
 	</node>
+	<!-- <node pkg="pc_store" name="downsampled_nc_srore_with_odometry_mapframe" type="downsampled_nc_srore_with_odometry_mapframe" output="screen"> -->
+	<!-- 	<remap from="/odom" to="/ekf/odom"/> -->
+	<!-- 	<remap from="/normals" to="/selected_normals"/> -->
+	<!-- 	<param name="leaf_size" type="double" value="0.5"/> -->
+	<!-- </node> -->
 </launch>
