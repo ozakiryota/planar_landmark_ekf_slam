@@ -511,16 +511,17 @@ void PlanarLandmarkEKF::DataAssociation(void)
 				else{
 					int tmp_corr_lm_id = list_obs.features[obs_id].corr_id;
 					if(list_lm.features[tmp_corr_lm_id].list_lm_observed_simul[i]){
-						// #<{(|compare|)}>#
-						// double coincidence_ratio_new = ComputeCoincidenceRatio(list_lm.features[i], list_obs.features[obs_id]);
-						// double coincidence_ratio_last = ComputeCoincidenceRatio(list_lm.features[tmp_corr_lm_id], list_obs.features[obs_id]);
+						/*compare*/
+						double coincidence_ratio_new = ComputeCoincidenceRatio(list_lm.features[i], list_obs.features[obs_id]);
+						double coincidence_ratio_last = ComputeCoincidenceRatio(list_lm.features[tmp_corr_lm_id], list_obs.features[obs_id]);
 						// if(coincidence_ratio_new > coincidence_ratio_last)	list_obs.features[obs_id].corr_id = i;
 						// else{
 						// 	list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
 						// 	flag_break = false;
 						// }
+						if(coincidence_ratio_new > 0.3 && coincidence_ratio_last > 0.3)	MergeLM(tmp_corr_lm_id, i);
 						/*compare*/
-						if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
+						else if(list_lm.features[i].corr_dist < list_lm.features[tmp_corr_lm_id].corr_dist)	list_obs.features[obs_id].corr_id = i;
 						else{
 							list_obs.features[obs_id].corr_id = tmp_corr_lm_id;
 							flag_break = false;
