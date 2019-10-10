@@ -882,14 +882,40 @@ void PlanarLandmarkEKF::DataSyncAfterAssoc(void)
 		list_lm.features[i].origin.orientation = QuatEigenToMsg(q_orientation);
 		landmark_origins.poses.push_back(list_lm.features[i].origin);
 		/*visual scale*/
-		Eigen::Vector3d MinMax(
+		std::vector<Eigen::Vector3d> list_minmax_line(2);
+		list_minmax_line[0] = {
 			list_lm.features[i].max_global.x - list_lm.features[i].min_global.x,
 			list_lm.features[i].max_global.y - list_lm.features[i].min_global.y,
 			list_lm.features[i].max_global.z - list_lm.features[i].min_global.z
-		);
-		list_lm.features[i].scale.x = (MinMax.dot(tmp_axes[0])/tmp_axes[0].norm()/tmp_axes[0].norm()*tmp_axes[0]).norm();
-		list_lm.features[i].scale.y = (MinMax.dot(tmp_axes[1])/tmp_axes[1].norm()/tmp_axes[1].norm()*tmp_axes[1]).norm();
-		list_lm.features[i].scale.z = (MinMax.dot(tmp_axes[2])/tmp_axes[2].norm()/tmp_axes[2].norm()*tmp_axes[2]).norm();
+		};
+		list_minmax_line[1] = {
+			list_lm.features[i].min_global.x - list_lm.features[i].max_global.x,
+			list_lm.features[i].max_global.y - list_lm.features[i].min_global.y,
+			list_lm.features[i].max_global.z - list_lm.features[i].min_global.z
+		};
+		for(size_t j=0;j<list_minmax_line.size();j++){
+			if(j==0){
+				list_lm.features[i].scale.x = (list_minmax_line[0].dot(tmp_axes[0])/tmp_axes[0].norm()/tmp_axes[0].norm()*tmp_axes[0]).norm();
+				list_lm.features[i].scale.y = (list_minmax_line[0].dot(tmp_axes[1])/tmp_axes[1].norm()/tmp_axes[1].norm()*tmp_axes[1]).norm();
+				list_lm.features[i].scale.z = (list_minmax_line[0].dot(tmp_axes[2])/tmp_axes[2].norm()/tmp_axes[2].norm()*tmp_axes[2]).norm();
+			}
+			else{
+				double tmp_scale_x = (list_minmax_line[1].dot(tmp_axes[0])/tmp_axes[0].norm()/tmp_axes[0].norm()*tmp_axes[0]).norm();
+				double tmp_scale_y = (list_minmax_line[1].dot(tmp_axes[1])/tmp_axes[1].norm()/tmp_axes[1].norm()*tmp_axes[1]).norm();
+				double tmp_scale_z = (list_minmax_line[1].dot(tmp_axes[2])/tmp_axes[2].norm()/tmp_axes[2].norm()*tmp_axes[2]).norm();
+				if(list_lm.features[i].scale.x < tmp_scale_x)	list_lm.features[i].scale.x = tmp_scale_x;
+				if(list_lm.features[i].scale.y < tmp_scale_y)	list_lm.features[i].scale.y = tmp_scale_y;
+				if(list_lm.features[i].scale.z < tmp_scale_z)	list_lm.features[i].scale.z = tmp_scale_z;
+			}
+		}
+		// Eigen::Vector3d MinMax(
+		// 	list_lm.features[i].max_global.x - list_lm.features[i].min_global.x,
+		// 	list_lm.features[i].max_global.y - list_lm.features[i].min_global.y,
+		// 	list_lm.features[i].max_global.z - list_lm.features[i].min_global.z
+		// );
+		/* list_lm.features[i].scale.x = (MinMax.dot(tmp_axes[0])/tmp_axes[0].norm()/tmp_axes[0].norm()*tmp_axes[0]).norm(); */
+		/* list_lm.features[i].scale.y = (MinMax.dot(tmp_axes[1])/tmp_axes[1].norm()/tmp_axes[1].norm()*tmp_axes[1]).norm(); */
+		/* list_lm.features[i].scale.z = (MinMax.dot(tmp_axes[2])/tmp_axes[2].norm()/tmp_axes[2].norm()*tmp_axes[2]).norm(); */
 		/*input*/
 		PushBackMarkerPlanes(list_lm.features[i]);
 	}
