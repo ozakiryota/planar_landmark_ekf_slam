@@ -715,6 +715,7 @@ void PlanarLandmarkEKF::UpdateLMInfo(int lm_id)
 	/* std::cout << "Update landmark information" << std::endl; */
 
 	list_lm.features[lm_id].was_observed_in_this_scan = true;
+	// list_lm.features[lm_id].was_merged = false;
 	int obs_id = list_lm.features[lm_id].corr_id;
 	/*min-max*/
 	if(list_lm.features[lm_id].min_global.x > list_obs.features[obs_id].min_global.x)	list_lm.features[lm_id].min_global.x = list_obs.features[obs_id].min_global.x;
