@@ -20,7 +20,7 @@
 		<remap from="/normals" to="/normals/selected"/>
 		<remap from="/normals/stored" to="/normals/selected/stored"/>
 		<param name="pc_range" type="double" value="10.0"/>
-		<param name="leaf_size" type="double" value="0.5"/>
+		<param name="leaf_size" type="double" value="0.4"/>
 	</node>
 	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction_flexible_tolerance" type="planar_feature_extraction_flexible_tolerance" output="screen">
 		<!-- <remap from="/normals" to="/normals/selected"/> -->
