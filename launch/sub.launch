@@ -31,4 +31,11 @@
 		<param name="min_cluster_size" type="int" value="300"/>
 		<param name="threshold_angle" type="double" value="1.0"/>
 	</node>
+
+	<!-- comparisons -->
+	<include file="$(find loam_velodyne)/launch/hector_loam_velodyne.launch"/>
+	<node pkg="msg_conversion" type="odometry_zxy_to_xyz" name="odometry_zxy_to_xyz">
+		<remap from="/odom" to="/integrated_to_init"/>
+		<remap from="/odom/change_axis" to="/loam/odom"/>
+	</node>
 </launch>
