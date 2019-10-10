@@ -7,6 +7,9 @@
 	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019&#45;05&#45;24&#45;18&#45;40&#45;39.bag"/> -->
 	<node pkg="rosbag" type="play" name="player" args="--clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019-07-04-20-05-36.bag"/>
 
+	<!-- semi sensor driver -->
+	<node pkg="msg_conversion" name="odometry_yaw_to_quaternion" type="odometry_yaw_to_quaternion"/>
+
 	<!-- rviz -->
 	<!-- <node pkg="rviz" type="rviz" name="rviz" args="&#45;d $(find planar_landmark_ekf_slam)/rviz_config/planar_landmark_ekf_slam.rviz"/> -->
 	<node pkg="rviz" type="rviz" name="rviz" args="-d $(find planar_landmark_ekf_slam)/rviz_config/d_kan_top.rviz"/>

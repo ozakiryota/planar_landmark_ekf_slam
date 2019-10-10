@@ -4,7 +4,7 @@
 
 	<!-- sensor driver -->
 	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
-	<node pkg="pose_estimation_walls" name="odom_republish_infant" type="odom_republish_infant"/>
+	<!-- <node pkg="pose_estimation_walls" name="odom_republish_infant" type="odom_republish_infant"/> -->
 
 	<!-- proposed method -->
 	<node pkg="planar_landmark_ekf_slam" name="planar_normal_estimation" type="planar_normal_estimation">
