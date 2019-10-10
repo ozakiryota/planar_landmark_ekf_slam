@@ -31,6 +31,7 @@
 		<param name="max_tolerance" type="double" value="0.5"/>
 		<param name="min_cluster_size" type="int" value="300"/>
 		<param name="threshold_angle" type="double" value="1.0"/>
+		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
 	</node>
 
 	<!-- comparisons -->
