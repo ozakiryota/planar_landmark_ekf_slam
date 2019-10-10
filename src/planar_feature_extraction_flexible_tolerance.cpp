@@ -36,6 +36,7 @@ class PlanarFeatureExtraction{
 		int min_cluster_size;
 		int max_cluster_size;
 		double threshold_angle;	//[deg]
+		bool mode_open_viewer;
 	public:
 		PlanarFeatureExtraction();
 		void CallbackNC(const sensor_msgs::PointCloud2ConstPtr &msg);
@@ -71,6 +72,10 @@ PlanarFeatureExtraction::PlanarFeatureExtraction()
 	std::cout << "min_cluster_size = " << min_cluster_size << std::endl;
 	nhPrivate.param("threshold_angle", threshold_angle, 1.0);
 	std::cout << "threshold_angle = " << threshold_angle << std::endl;
+	nhPrivate.param("mode_open_viewer", mode_open_viewer, true);
+	std::cout << "mode_open_viewer = " << (bool)mode_open_viewer << std::endl;
+
+	if(!mode_open_viewer)	viewer.close();
 }
 
 void PlanarFeatureExtraction::CallbackNC(const sensor_msgs::PointCloud2ConstPtr &msg)
@@ -84,7 +89,7 @@ void PlanarFeatureExtraction::CallbackNC(const sensor_msgs::PointCloud2ConstPtr 
 
 	ClearArray();
 	Clustering();
-	Visualization();
+	if(mode_open_viewer)	Visualization();
 	if(!feature_array.features.empty())	Publication();
 }
 
