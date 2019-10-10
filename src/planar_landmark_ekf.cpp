@@ -1077,7 +1077,7 @@ void PlanarLandmarkEKF::Publication(void)
 
 void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFeature lm)
 {
-	const double thickness = 0.05;
+	const double thickness = 0.1;
 
 	visualization_msgs::Marker tmp;
 	tmp.header.frame_id = "/odom";
@@ -1093,45 +1093,45 @@ void PlanarLandmarkEKF::PushBackMarkerPlanes(planar_landmark_ekf_slam::PlanarFea
 		tmp.color.r = 1.0;
 		tmp.color.g = 0.0;
 		tmp.color.b = 0.0;
-		tmp.color.a = 0.9;
+		tmp.color.a = 0.7;
 	}
 	else if(lm.was_merged){
 		tmp.color.r = 1.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 0.0;
-		tmp.color.a = 0.4;
+		tmp.color.a = 0.1;
 	}
 	else if(lm.was_erased){
 		tmp.color.r = 1.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 1.0;
-		tmp.color.a = 0.4;
+		tmp.color.a = 0.1;
 	}
 	else if(lm.observable){
 		tmp.color.r = 0.0;
 		tmp.color.g = 1.0;
 		tmp.color.b = 0.0;
-		tmp.color.a = 0.9;
+		tmp.color.a = 0.7;
 	}
 	else{
 		tmp.color.r = 0.0;
 		tmp.color.g = 0.0;
 		tmp.color.b = 1.0;
-		tmp.color.a = 0.9;
+		tmp.color.a = 0.7;
 	}
 	tmp.color.r /= 2.0;
 	tmp.color.g /= 2.0;
 	tmp.color.b /= 2.0;
 
 	/*test*/
-	const int highlighted_lm = 13;
-	if(lm.id == highlighted_lm){
-		tmp.color.r = 0.0;
-		tmp.color.g = 1.0;
-		tmp.color.b = 1.0;
-		if(lm.was_observed_in_this_scan)	tmp.color.a = 0.9;
-		else	tmp.color.a = 0.4;
-	}
+	/* const int highlighted_lm = 13; */
+	/* if(lm.id == highlighted_lm){ */
+	/* 	tmp.color.r = 0.0; */
+	/* 	tmp.color.g = 1.0; */
+	/* 	tmp.color.b = 1.0; */
+	/* 	if(lm.was_observed_in_this_scan)	tmp.color.a = 0.9; */
+	/* 	else	tmp.color.a = 0.4; */
+	/* } */
 	/*test*/
 	/* tmp.pose.orientation.x = 0; */
 	/* tmp.pose.orientation.y = 0; */
