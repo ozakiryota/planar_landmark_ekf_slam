@@ -795,7 +795,7 @@ void PlanarLandmarkEKF::RegistrationNewLM(planar_landmark_ekf_slam::PlanarFeatur
 	}
 	/*P*/
 	Eigen::MatrixXd Ptmp = P;
-	const double initial_lm_sigma = 1.0e-3;
+	const double initial_lm_sigma = 1.0e-4;
 	P = initial_lm_sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	P.block(0, 0, Ptmp.rows(), Ptmp.cols()) = Ptmp;
 }
