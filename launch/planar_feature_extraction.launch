@@ -23,7 +23,7 @@
 
 	<!-- main -->
 	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction" output="screen">
-		<remap from="/normals" to="/selected_normals"/>
+		<remap from="/normals" to="/normals/selected"/>
 		<param name="cluster_tolerance" type="double" value="0.1"/>
 		<param name="min_cluster_size" type="int" value="150"/>
 	</node>

@@ -311,7 +311,7 @@ void PlanarFeatureExtraction::Visualization(void)
 	}
 	/*features*/
 	viewer.addPointCloudNormals<pcl::PointNormal>(features_n, 1, 1.0, "features_n");
-	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, "features_n");
+	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 1.0, "features_n");
 	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 2, "features_n");
 
 	viewer.spinOnce();
