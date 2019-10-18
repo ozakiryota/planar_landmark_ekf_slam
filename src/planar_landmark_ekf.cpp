@@ -257,7 +257,7 @@ void PlanarLandmarkEKF::PredictionIMU(sensor_msgs::Imu imu, double dt)
 	jF.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Identity(num_wall*size_lm_state, num_wall*size_lm_state);
 	
 	/*Q*/
-	const double sigma = 1.0e-5;
+	const double sigma = 1.0e-4;
 	Eigen::MatrixXd Q = sigma*Eigen::MatrixXd::Identity(X.size(), X.size());
 	Q.block(0, 0, 3, 3) = Eigen::MatrixXd::Zero(3, 3);
 	Q.block(size_robot_state, size_robot_state, num_wall*size_lm_state, num_wall*size_lm_state) = Eigen::MatrixXd::Zero(num_wall*size_lm_state, num_wall*size_lm_state);
