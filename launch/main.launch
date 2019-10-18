@@ -30,6 +30,7 @@
 	<!-- comparisons -->
 	<node pkg="gyrodometry" name="gyrodometry3d" type="gyrodometry3d">
 		<remap from="/odom" to="/tinypower/odom/republished"/>
+		<param name="mode_use_linear_velocity" type="bool" value="true"/>
 	</node>
 	<!-- <include file="$(find loam_velodyne)/launch/hector_loam_velodyne.launch"/> -->
 	<!-- <node pkg="msg_conversion" type="odometry_zxy_to_xyz" name="odometry_zxy_to_xyz"> -->
