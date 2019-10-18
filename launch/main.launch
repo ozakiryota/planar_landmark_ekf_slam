@@ -10,7 +10,7 @@
 
 	<!-- semi sensor driver -->
 	<node pkg="msg_conversion" name="infant_odometry_republish" type="infant_odometry_republish" output="screen">
-		<param name="velocity_scalar_ratio" type="double" value="0.91"/>
+		<param name="velocity_scalar_ratio" type="double" value="0.92"/>
 	</node>
 
 	<!-- rviz -->
