@@ -46,6 +46,7 @@ class PlanarFeatureExtraction{
 		bool CustomCondition(const pcl::PointNormal& seedPoint, const pcl::PointNormal& candidatePoint, float squaredDistance);
 		// Eigen::Vector4d ComputeAverageNormal_(pcl::PointIndices indices);
 		Eigen::Vector3d ComputeAverageNormal(const pcl::PointIndices& indices);
+		bool CheckNormalIsInward(pcl::PointNormal normal);
 		void Visualization(void);
 		void Publication(void);
 };
@@ -272,12 +273,30 @@ Eigen::Vector3d PlanarFeatureExtraction::ComputeAverageNormal(const pcl::PointIn
 			fabs(normals->points[indices.indices[i]].data_n[3]) * normals->points[indices.indices[i]].normal_y,
 			fabs(normals->points[indices.indices[i]].data_n[3]) * normals->points[indices.indices[i]].normal_z
 		);
+		if(!CheckNormalIsInward(normals->points[indices.indices[i]]))	N *= -1;
 		Ave += N;
 		/* std::cout << "N" << i << ": (" << N(0) << ", " << N(1) << ", " << N(2) << std::endl; */
 	}
 	Ave /= (double)indices.indices.size();
 
 	return Ave;
+}
+
+bool PlanarFeatureExtraction::CheckNormalIsInward(pcl::PointNormal normal)
+{
+	Eigen::Vector3d Position(
+		normal.x,
+		normal.y,
+		normal.z
+	);
+	Eigen::Vector3d Normal(
+		normal.normal_x,
+		normal.normal_y,
+		normal.normal_z
+	);
+	double dot = Position.dot(Normal);
+	if(dot<0)	return true;
+	else	return false;
 }
 
 void PlanarFeatureExtraction::Visualization(void)
