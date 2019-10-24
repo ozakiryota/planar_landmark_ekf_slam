@@ -6,60 +6,83 @@
 	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/mocap/0119_infant/2019&#45;01&#45;19&#45;18&#45;26&#45;15.bag &#45;s 75"/> -->
 	<node pkg="rosbag" type="play" name="player" args="--clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019-05-24-18-40-39.bag"/>
 	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/infant/indoor_dkan/2019&#45;07&#45;04&#45;20&#45;05&#45;36.bag"/> -->
+	<!-- <node pkg="rosbag" type="play" name="player" args="&#45;&#45;clock /home/amsl/ozaki/bagfiles/infant2/indoor_dkan/3rounds/2019&#45;10&#45;18&#45;17&#45;30&#45;50.bag"/> -->
 
 	<!-- rviz -->
 	<node pkg="rviz" type="rviz" name="rviz" args="-d $(find planar_landmark_ekf_slam)/rviz_config/planar_landmark_ekf_slam.rviz"/>
 
 	<!-- sensor driver -->
 	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
-	<node pkg="pose_estimation_walls" name="odom_republish_infant" type="odom_republish_infant"/>
 
-	<!-- proposed method -->
+	<!-- semi sensor driver -->
+	<node pkg="msg_conversion" name="infant_odometry_republish" type="infant_odometry_republish" output="screen">
+		<param name="velocity_scalar_ratio" type="double" value="1.0"/>
+	</node>
 	<node pkg="gyrodometry" name="initial_alignment" type="initial_alignment" output="screen">
 		<param name="initial_orientation_is_0001" type="bool" value="true"/>
 	</node>
+
+	<!-- feature extraction -->
 	<node pkg="planar_landmark_ekf_slam" name="planar_normal_estimation" type="planar_normal_estimation">
 		<param name="skip" type="int" value="3"/>
 		<param name="search_radius_ratio" type="double" value="0.09"/>
 		<param name="min_serach_radius" type="double" value="0.1"/>
 		<!-- <param name="mode_remove_ground" type="bool" value="true"/> -->
-		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
 		<!-- <param name="mode_selection" type="bool" value="false"/> -->
+		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
 	</node>
-	<!-- <node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction" type="planar_feature_extraction"> -->
-	<!-- 	<remap from="/normals" to="/normals/selected"/> -->
-	<!-- 	<param name="cluster_tolerance" type="double" value="0.1"/> -->
-	<!-- 	<!&#45;&#45; <param name="min_cluster_size" type="int" value="150"/> &#45;&#45;> -->
-	<!-- 	<param name="min_cluster_size" type="int" value="1000"/> -->
-	<!-- </node> -->
-	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction_flexible_tolerance" type="planar_feature_extraction_flexible_tolerance" output="screen">
+	<node pkg="pc_store" name="downsampled_nc_srore_with_odometry" type="downsampled_nc_srore_with_odometry" output="screen">
+		<remap from="/odom" to="/ekf/odom"/>
 		<remap from="/normals" to="/normals/selected"/>
-		<param name="ratio_depth_tolerance" type="double" value="0.09"/>
+		<remap from="/normals/stored" to="/normals/selected/stored"/>
+		<param name="pc_range" type="double" value="5.0"/>
+		<param name="leaf_size" type="double" value="0.05"/>
+		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
+	</node>
+	<node pkg="planar_landmark_ekf_slam" name="planar_feature_extraction_flexible_tolerance" type="planar_feature_extraction_flexible_tolerance" output="screen">
+		<!-- <remap from="/normals" to="/normals/selected"/> -->
+		<remap from="/normals" to="/normals/selected/stored"/>
+		<param name="ratio_depth_tolerance" type="double" value="0.05"/>
 		<param name="min_tolerance" type="double" value="0.1"/>
 		<param name="max_tolerance" type="double" value="0.5"/>
-		<param name="min_cluster_size" type="int" value="1000"/>
+		<param name="min_cluster_size" type="int" value="200"/>
 		<param name="threshold_angle" type="double" value="1.0"/>
+		<!-- <param name="mode_open_viewer" type="bool" value="false"/> -->
 	</node>
+
+	<!-- ekf -->
 	<node pkg="planar_landmark_ekf_slam" name="planar_landmark_ekf" type="planar_landmark_ekf" output="screen">
-		<param name="threshold_corr_dist" type="double" value="0.15"/>
-		<param name="threshold_corr_position_diff" type="double" value="0.1"/>
+		<remap from="/tinypower/odom" to="/tinypower/odom/republished"/>
+		<param name="threshold_corr_dist" type="double" value="0.2"/>
+		<param name="threshold_corr_position_diff" type="double" value="0.2"/>
 	</node>
 
 	<!-- comparisons -->
 	<node pkg="gyrodometry" name="gyrodometry3d" type="gyrodometry3d">
 		<remap from="/odom" to="/tinypower/odom/republished"/>
+		<param name="mode_use_linear_velocity" type="bool" value="true"/>
 	</node>
-	<!-- <include file="$(find loam_velodyne)/launch/hector_loam_velodyne.launch"/> -->
-	<!-- <node pkg="msg_conversion" type="odometry_zxy_to_xyz" name="odometry_zxy_to_xyz"> -->
-	<!-- 	<remap from="/odom" to="/integrated_to_init"/> -->
-	<!-- 	<remap from="/odom/change_axis" to="/loamvelodyne_odometry"/> -->
-	<!-- </node> -->
+	<include file="$(find loam_velodyne)/launch/hector_loam_velodyne.launch"/>
+	<node pkg="msg_conversion" type="odometry_zxy_to_xyz" name="odometry_zxy_to_xyz">
+		<remap from="/odom" to="/integrated_to_init"/>
+		<remap from="/odom/change_axis" to="/loam/odom"/>
+	</node>
 
 	<!-- for visualize trajectory -->
 	<node pkg="msg_conversion" type="posestamped_to_odometry" name="posestamped_to_odometry">
 		<remap from="/pose" to="/ekf/pose"/>
 		<remap from="/odom/from_posestamped" to="/ekf/odom"/>
 		<param name="child_frame_id" type="string" value="/ekf/odom"/>
+	</node>
+	<!-- for visualize trajectory -->
+	<!-- <node pkg="pc_store" name="downsampled_pc_srore_with_odometry_mapframe" type="downsampled_pc_srore_with_odometry_mapframe" output="screen"> -->
+	<!-- 	<remap from="/odom" to="/ekf/odom"/> -->
+	<!-- 	<param name="leaf_size" type="double" value="0.5"/> -->
+	<!-- </node> -->
+	<node pkg="pc_store" name="downsampled_nc_srore_with_odometry_mapframe" type="downsampled_nc_srore_with_odometry_mapframe" output="screen">
+		<remap from="/odom" to="/ekf/odom"/>
+		<remap from="/normals" to="/normals/selected"/>
+		<param name="leaf_size" type="double" value="0.5"/>
 	</node>
 
 </launch>
